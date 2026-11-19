@@ -28,3 +28,8 @@ ScummVM fissato a 55c2973c1df5e8790b4248ae36a6b1b37842ce12.
 Riferimento strutturale Shiloh e3dfde0d098b25135a5243839d44842ccbc5fe91; attribuzione in THIRD_PARTY.md.
 
 Restano interprete eventi/script, gerarchia scene, dialoghi, inventario, PDA, salvataggi e partite complete.
+## Aggiornamento successivo
+Suite 44620882542: tutti e tre i job PASS, inclusa build Windows completa. Artefatto SHA256 8679acb69012cb18823ab41c1e64f1bca2a5d443bcc11b02828457e91abc46ba. Avvio CLI e rilevamento dati originali verificati; rendering interattivo ancora da verificare.
+Decodificate tutte le 14247 azioni, nessuna strutturalmente sconosciuta. L'interprete non e ancora implementato.
+Trovati 2061 record ISO associati/resource fork. Recupero corretto completato in work/xfiles-data da tutti i sette ISO, senza modificare D:. Verificati 101 duplicati QuickTime equivalenti salvo date e padding. Test sintetici ISO, estrazione, conflitti e ripresa PASS.
+

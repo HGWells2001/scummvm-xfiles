@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "xfiles.h"
+#include "script.h"
 #include "common/archive.h"
 #include "common/config-manager.h"
 #include "common/events.h"
 #include "common/file.h"
 #include "common/fs.h"
 #include "common/system.h"
+#include "common/textconsole.h"
 #include "engines/util.h"
 #include "graphics/font.h"
 #include "graphics/fontman.h"
@@ -123,6 +125,10 @@ Common::Error XFilesEngine::run() {
 	initGraphics(640,480,nullptr);
 	if(_system->getScreenFormat().bytesPerPixel==1) return Common::Error(Common::kUnsupportedColorMode);
 	collectMovies(); _status="Anteprima sperimentale: nessuna modifica ai dati originali."; drawBrowser();
+	if(ConfMan.hasKey("boot_param") && ConfMan.getInt("boot_param")==-1){
+		warning("XFILES smoke: title=%u state=%u movies=%u",(unsigned)_title.classes().size(),(unsigned)_state.classes().size(),(unsigned)_movies.size());
+		return _movies.empty()?Common::Error(Common::kReadingFailed,"Nessun filmato QuickTime locale"):Common::Error(Common::kNoError);
+	}
 	while(!shouldQuit()) {
 		Common::Event e; bool dirty=false;
 		while(_eventMan->pollEvent(e)) {
@@ -136,6 +142,12 @@ Common::Error XFilesEngine::run() {
 			case Common::KEYCODE_PAGEDOWN: if(!_movies.empty()) _selected=std::min(_selected+16,_movies.size()-1); break;
 			case Common::KEYCODE_RETURN: if(!_movies.empty()) play(_movies[_selected]); break;
 			case Common::KEYCODE_i: intro(); break;
+			case Common::KEYCODE_d: {
+				unsigned decoded=0,unsupported=0;
+				for(const NeoClass &cls:_title.classes())if(cls.id==0x41)for(const auto &entry:cls.objects){Action a;if(loadAction(_title,entry.first,a))++decoded;else ++unsupported;}
+				_status=Common::String::format("Azioni decodificate: %u | sconosciute: %u (esecuzione non implementata)",decoded,unsupported);
+				break;
+			}
 			default: break;
 			}
 		}

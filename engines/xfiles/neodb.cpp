@@ -93,6 +93,21 @@ bool NeoDb::assetInfo(uint32_t id, AssetDescriptor &out) const {
 	if (!record || !range(record,24)) return false;
 	return parseAsset(asset(id),_data[size_t(record)+22],out);
 }
+bool NeoDb::blobAt(size_t reference,std::vector<uint8_t> &out) const {
+	out.clear();
+	if(!range(reference,8)) return false;
+	const uint32_t mark=read32(reference), len=read32(reference+4);
+	if((!mark)!=(!len) || !range(mark,len)) return false;
+	out.assign(_data.begin()+mark,_data.begin()+size_t(mark)+len);
+	return true;
+}
+bool NeoDb::recordBytes(uint32_t cls,uint32_t id,size_t length,std::vector<uint8_t> &out) const {
+	out.clear();
+	const uint32_t mark=find(cls,id);
+	if(!mark || !range(mark,length)) return false;
+	out.assign(_data.begin()+mark,_data.begin()+size_t(mark)+length);
+	return true;
+}
 bool NeoDb::list(uint32_t cls, uint32_t id, std::vector<uint32_t> &out) {
 	out.clear();
 	const uint32_t record=find(cls,id);

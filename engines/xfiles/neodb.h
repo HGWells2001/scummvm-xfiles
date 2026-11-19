@@ -23,6 +23,8 @@ public:
 	std::string asset(uint32_t id) const;
 	bool assetInfo(uint32_t id, AssetDescriptor &out) const;
 	bool list(uint32_t cls, uint32_t id, std::vector<uint32_t> &out);
+	bool blobAt(size_t reference, std::vector<uint8_t> &out) const;
+	bool recordBytes(uint32_t cls, uint32_t id, size_t length, std::vector<uint8_t> &out) const;
 	const std::vector<NeoClass> &classes() const { return _classes; }
 	const std::string &error() const { return _error; }
 	uint32_t appVersion() const { return _appVersion; }

@@ -10,6 +10,10 @@ jobs:
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --parallel 2
       - run: ctest --test-dir build --output-on-failure
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node tests/prepare_data.mjs
   scummvm-compile:
     runs-on: ubuntu-latest
     steps:
@@ -51,7 +55,7 @@ jobs:
       - name: Build Windows preview
         working-directory: upstream
         run: |
-          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl
+          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl --disable-opengl --enable-scalers
           make -j4
           mkdir -p ../preview
           cp scummvm.exe ../preview/

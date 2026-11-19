@@ -9,7 +9,10 @@ not been ported or embedded. The asset descriptor format additionally references
 `port/src/front/intro.rs`, at the same pinned revision. The frontend is new C++
 code using ScummVM's video/audio APIs. Shiloh's MIT notice is reproduced below.
 
-+MIT License
+VCAction, condition and procedure layouts additionally reference
+`port/src/world/action.rs` at the same pinned revision.
+
+MIT License
 
 Copyright (c) 2026 The Shiloh contributors
 
