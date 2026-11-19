@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <set>
+#include "asset.h"
 
 namespace XFiles {
 struct NeoClass {
@@ -20,6 +21,8 @@ public:
 	uint16_t read16(size_t offset) const;
 	uint32_t find(uint32_t cls, uint32_t id) const;
 	std::string asset(uint32_t id) const;
+	bool assetInfo(uint32_t id, AssetDescriptor &out) const;
+	bool list(uint32_t cls, uint32_t id, std::vector<uint32_t> &out);
 	const std::vector<NeoClass> &classes() const { return _classes; }
 	const std::string &error() const { return _error; }
 	uint32_t appVersion() const { return _appVersion; }

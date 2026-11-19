@@ -1,5 +1,5 @@
 MODULE := engines/xfiles
-MODULE_OBJS := metaengine.o neodb.o
+MODULE_OBJS := metaengine.o neodb.o asset.o xfiles.o
 ifeq ($(ENABLE_XFILES), DYNAMIC_PLUGIN)
 PLUGIN := 1
 endif

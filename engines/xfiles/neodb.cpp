@@ -87,4 +87,28 @@ std::string NeoDb::asset(uint32_t id) const {
 	while (!result.empty() && result.back() == '\0') result.pop_back();
 	return result;
 }
+bool NeoDb::assetInfo(uint32_t id, AssetDescriptor &out) const {
+	out=AssetDescriptor();
+	const uint32_t record=find(0x35,id);
+	if (!record || !range(record,24)) return false;
+	return parseAsset(asset(id),_data[size_t(record)+22],out);
+}
+bool NeoDb::list(uint32_t cls, uint32_t id, std::vector<uint32_t> &out) {
+	out.clear();
+	const uint32_t record=find(cls,id);
+	if (!record || !range(record,32)) return fail("Missing or truncated persistent list");
+	const uint32_t count=read32(size_t(record)+6), root=read32(size_t(record)+10);
+	if (!count && !root) return true;
+	std::set<uint32_t> seen;
+	std::vector<uint32_t> nodes, result;
+	if (!leaves(root,0,seen,nodes)) return false;
+	for (uint32_t leaf:nodes) {
+		const uint32_t n=read16(size_t(leaf)+6);
+		if (!range(size_t(leaf)+8,size_t(n)*4) || result.size()+n>count) return fail("Invalid persistent list length");
+		for(uint32_t i=0;i<n;++i) result.push_back(read32(size_t(leaf)+8+i*4));
+	}
+	if(result.size()!=count) return fail("Persistent list count mismatch");
+	out.swap(result);
+	return true;
+}
 }

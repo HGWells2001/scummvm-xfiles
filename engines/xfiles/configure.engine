@@ -1,2 +1,2 @@
 # Experimental database reader only; intentionally disabled by default.
-add_engine xfiles "The X-Files Game (research prototype, not playable)" no "" "" "" ""
+add_engine xfiles "The X-Files Game (research prototype, not playable)" no "" "" "16bit" ""

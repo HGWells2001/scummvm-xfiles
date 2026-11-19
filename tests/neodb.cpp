@@ -37,5 +37,14 @@ int main() {
 	require(db.asset(42).empty(),"bad blob rejected");
 	x=b; put32(x,20,0x999); require(!db.load(x.data(),x.size()),"unsupported version");
 	require(db.load(b.data(),b.size()) && db.asset(42)=="test","reload after failure");
+	x=b; put32(x,83,0x36); put32(x,518,2); put32(x,522,560);
+	x[560]=0x80; x[567]=2; put32(x,568,100); put32(x,572,200);
+	std::vector<uint32_t> ids;
+	require(db.load(x.data(),x.size()) && db.list(0x36,42,ids),"persistent ID list");
+	require(ids==std::vector<uint32_t>({100,200}),"ID list order");
+	put32(x,518,1);
+	require(db.load(x.data(),x.size()) && !db.list(0x36,42,ids) && ids.empty(),"ID list count mismatch");
+	put32(x,518,2); x[560]=0; x[567]=1; put32(x,568,560);
+	require(db.load(x.data(),x.size()) && !db.list(0x36,42,ids),"ID list cycle");
 	std::cout << "PASS: valid indexes, blobs, truncation, cycles, bounds, version and reload\n";
 }

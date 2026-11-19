@@ -26,3 +26,38 @@ jobs:
         run: |
           ./configure --disable-all-engines --enable-engine=xfiles --disable-debug
           make -j2 engines/xfiles/libxfiles.a engines/xfiles/detection.o
+  windows-preview:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            make
+            python
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-SDL2
+      - name: Prepare reviewed ScummVM source
+        run: |
+          git clone --filter=blob:none https://github.com/scummvm/scummvm.git upstream
+          git -C upstream checkout 55c2973c1df5e8790b4248ae36a6b1b37842ce12
+          python tools/install_engine.py upstream
+      - name: Build Windows preview
+        working-directory: upstream
+        run: |
+          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl
+          make -j4
+          mkdir -p ../preview
+          cp scummvm.exe ../preview/
+          ldd scummvm.exe | awk '/\/mingw64\/bin\// {print $3}' | while read -r dll; do cp "$dll" ../preview/; done
+          cp ../README.md ../LICENSE ../THIRD_PARTY.md ../preview/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScummVM-XFiles-Windows-preview
+          path: preview/

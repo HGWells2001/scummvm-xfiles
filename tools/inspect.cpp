@@ -15,7 +15,17 @@ int main(int argc, char **argv) {
 	for (const auto &cls : db.classes()) {
 		std::cout << "class=" << std::hex << cls.id << std::dec << " declared=" << cls.declaredCount
 		          << " indexed=" << cls.objects.size() << '\n';
-		if (cls.id == 0x35) for (const auto &entry : cls.objects)
-			std::cout << "asset=" << entry.first << " path=" << db.asset(entry.first) << '\n';
+		if (cls.id == 0x35) {
+			size_t parsed=0, failed=0;
+			for (const auto &entry : cls.objects) {
+				XFiles::AssetDescriptor asset;
+				if (!db.assetInfo(entry.first,asset)) { ++failed; continue; }
+				++parsed;
+				for(const auto &variant:asset.entries)
+					std::cout << "asset=" << entry.first << " variant=" << variant.variant << " file=" << variant.file
+					          << " start=" << variant.start << " end=" << variant.end << '\n';
+			}
+			std::cout << "asset_blobs_parsed=" << parsed << " other_or_unsupported=" << failed << '\n';
+		}
 	}
 }
