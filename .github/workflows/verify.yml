@@ -1,0 +1,28 @@
+name: Verify experimental engine
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  database-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure
+  scummvm-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+      - name: Prepare pinned upstream without game data
+        run: |
+          git clone --filter=blob:none https://github.com/scummvm/scummvm.git upstream
+          git -C upstream checkout 55c2973c1df5e8790b4248ae36a6b1b37842ce12
+          python3 tools/install_engine.py upstream
+          python3 tools/install_engine.py upstream
+      - name: Compile detector and native engine
+        working-directory: upstream
+        run: |
+          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug
+          make -j2 engines/xfiles/libxfiles.a engines/xfiles/detection.o

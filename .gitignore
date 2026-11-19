@@ -1,0 +1,7 @@
+/build/
+/reports/local/
+/upstream/
+*.obj
+*.exe
+*.pdb
+*.ilk
