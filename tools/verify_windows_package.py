@@ -5,6 +5,19 @@ import os
 import pathlib
 import subprocess
 
+def standalone_environment(source):
+    env = dict(source)
+    root = next((v for k, v in env.items() if k.upper() == "SYSTEMROOT" and v), None)
+    if not root:
+        root = next((v for k, v in env.items() if k.upper() == "WINDIR" and v), None)
+    if not root or not pathlib.PureWindowsPath(root).is_absolute():
+        raise RuntimeError("Windows system directory is unavailable")
+    for key in list(env):
+        if key.upper() == "PATH":
+            del env[key]
+    env["PATH"] = str(pathlib.PureWindowsPath(root) / "System32")
+    return env
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", type=pathlib.Path)
@@ -12,8 +25,7 @@ def main():
     if os.name != "nt":
         parser.error("Run this executable-package check on Windows")
     executable = args.directory.resolve() / "scummvm.exe"
-    env = os.environ.copy()
-    env["PATH"] = str(pathlib.Path(env["SystemRoot"]) / "System32")
+    env = standalone_environment(os.environ)
     for option in ["--version", "--list-engines"]:
         result = subprocess.run(
             [str(executable), option], cwd=executable.parent, env=env,
