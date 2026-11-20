@@ -23,6 +23,23 @@ pub fn selected_root(selected:&Path)->Result<PathBuf,String>{
 pub fn data_root(selected:&Path)->Result<PathBuf,String>{
     static INIT:std::sync::OnceLock<bool>=std::sync::OnceLock::new();
     if !*INIT.get_or_init(xf::vfs::install){return Err("Game file backend unavailable".into());}
+    // Installer LAYOUT.BIN is not a disc image. Build directory layers explicitly
+    // instead of letting an arbitrary .BIN hide an otherwise valid copied CD.
+    let mut installs=Vec::new();
+    for name in ["MININST","MEDINST"]{
+        if let Some(p)=super::restore::child(selected,name).filter(|p|p.is_dir()){installs.push(p);}
+    }
+    if installs.iter().any(|p|super::restore::child(p,"XFILES.HDB").is_some()){
+        let mut ds=xf::vfs::DataSet::open(&installs)?;
+        let root=ds.layers.iter().find_map(|l|match l{
+            xf::vfs::Layer::Dir(p)=>p.parent().map(Path::to_path_buf),_=>None
+        }).ok_or("CD directory layers unavailable")?;
+        ds.layers.push(xf::vfs::Layer::Dir(root));
+        ds.root=selected.to_path_buf();ds.sources=vec![selected.to_path_buf()];
+        for (fatal,message) in ds.check(){if fatal{return Err(message);}}
+        for line in ds.describe(){eprintln!("XFILES: game files from {line}");}
+        return Ok(xf::vfs::mount(ds).root.clone());
+    }
     xf::vfs::data_root(&[selected.to_path_buf()],&mut |line|eprintln!("XFILES: {line}"))
 }
 
@@ -112,6 +129,7 @@ pub fn audio_cache(data:&Path,saves:&Path,original:&Path)->Result<(),String>{
         std::fs::write(data.join("MININST/X.PFF"),b"PFF preferred").unwrap();
         std::fs::write(data.join("MEDINST/X.PFF"),b"PFF secondary").unwrap();
         std::fs::write(data.join("XV/64421.XMV"),b"movie").unwrap();
+        std::fs::write(data.join("LAYOUT.BIN"),b"installer metadata, not a CD image").unwrap();
         let selected=data.canonicalize().unwrap();let merged=data_root(&selected).unwrap();
         assert_eq!(selected_root(&data.join("MININST")).unwrap(),selected);
         let lib=MediaLib::new(&merged);
