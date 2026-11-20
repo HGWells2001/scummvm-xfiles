@@ -12,6 +12,10 @@ static const char *const variant="Database research prototype (not playable)";
 #endif
 static const ADGameDescription descriptions[] = {
 	{"xfiles", variant,
+	 AD_ENTRY2s("XFILES.HDB", "de4e775a71d05ba0b5c5c7b0d71d6b3a", 6074064,
+	            "XFILES.GAM", "9fc99da2d65bee17e6bd9cf1f7b3fd59", 155544),
+	 Common::IT_ITA, Common::kPlatformWindows, ADGF_UNSTABLE, GUIO1(GUIO_NOMIDI)},
+	{"xfiles", variant,
 	 AD_ENTRY2s("XFILES.HDB", "a87bbe0f3b51856303386db083c0321b", 6042472,
 	            "XFILES.GAM", "1de1e4d2a05c5185605232caee341661", 154656),
 	 Common::UNK_LANG, Common::kPlatformWindows, ADGF_UNSTABLE, GUIO1(GUIO_NOMIDI)},
