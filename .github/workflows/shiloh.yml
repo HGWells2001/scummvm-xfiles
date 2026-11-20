@@ -61,6 +61,7 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-freetype
+            mingw-w64-x86_64-pkgconf
       - name: Build pinned in-process runtime without SDL frontend
         run: |
           export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"

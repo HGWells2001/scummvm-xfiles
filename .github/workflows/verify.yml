@@ -67,6 +67,7 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-freetype
+            mingw-w64-x86_64-pkgconf
       - name: Prepare reviewed ScummVM source
         run: |
           git clone --filter=blob:none https://github.com/scummvm/scummvm.git upstream
