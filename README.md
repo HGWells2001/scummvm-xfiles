@@ -23,24 +23,15 @@ nel suo menu originale. L'integrazione con il browser globale dei salvataggi di
 ScummVM non e ancora implementata.
 
 Su Windows il motore imposta il renderer software prima di inizializzare il video.
-La prima copia esaminata contiene resource fork Macintosh al posto dei dati
-completi: alcuni vuoti da 286 byte, altri piu grandi, compresi i filmati del menu.
-Il motore riconosce la struttura del resource fork e verifica che i
-sette ISO originali accanto alla cartella corrispondano a XFILES.HDB e XFILES.GAM,
-quindi ripristina i file incompleti nella stessa cartella. Conserva gli originali
-in D:\The X-Files\.xfiles-resourcefork-backup e sostituisce i singoli file in modo
-atomico, senza sovrascrivere i dati gia validi. Esc interrompe la preparazione;
-un avvio successivo riprende i file ancora incompleti.
-
-Per questa copia gli ISO sono D:\The_X-Files_-_The_Game_CD1.iso fino a CD7.iso.
-Servono per il ripristino iniziale: dopo, il gioco legge i file recuperati da
-D:\The X-Files. Una copia gia completa dei CD non richiede questo ripristino.
-Il controllo diagnostico xfiles-folder-check.exe CARTELLA e di sola lettura.
+Il gioco usa direttamente i file completi della cartella selezionata. Il motore
+non cerca ISO, non esegue scansioni per il ripristino e non sostituisce i file
+del gioco. Il controllo diagnostico xfiles-folder-check.exe CARTELLA verifica
+soltanto il caricamento dei database ed e di sola lettura.
 
 La versione italiana viene identificata dai suoi XFILES.HDB e XFILES.GAM come
 **Italiano / Windows**, con un target separato dall'altra edizione. La copia
-italiana esaminata contiene gia i dati completi: non richiede il recupero dagli
-ISO. Audio, testi e filmati restano quelli dei suoi file originali.
+italiana esaminata contiene gia i dati completi. Audio, testi e filmati restano
+quelli dei suoi file originali.
 
 ## Stato e dettagli per sviluppatori
 

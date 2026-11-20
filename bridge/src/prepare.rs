@@ -3,6 +3,10 @@ use std::path::{Path,PathBuf};
 use std::process::{Command,Stdio};
 use xf::media::{MediaLib,audio::{self,Pcm},pcmcache,qt::Movie};
 
+fn child(dir:&Path,name:&str)->Option<PathBuf>{
+    std::fs::read_dir(dir).ok()?.flatten().find(|e|e.file_name().to_string_lossy().eq_ignore_ascii_case(name)).map(|e|e.path())
+}
+
 pub fn selected_root(selected:&Path)->Result<PathBuf,String>{
     let selected=selected.canonicalize().map_err(|e|e.to_string())?;
     let install=selected.file_name().is_some_and(|n|{
@@ -27,9 +31,9 @@ pub fn data_root(selected:&Path)->Result<PathBuf,String>{
     // instead of letting an arbitrary .BIN hide an otherwise valid copied CD.
     let mut installs=Vec::new();
     for name in ["MININST","MEDINST"]{
-        if let Some(p)=super::restore::child(selected,name).filter(|p|p.is_dir()){installs.push(p);}
+        if let Some(p)=child(selected,name).filter(|p|p.is_dir()){installs.push(p);}
     }
-    if installs.iter().any(|p|super::restore::child(p,"XFILES.HDB").is_some()){
+    if installs.iter().any(|p|child(p,"XFILES.HDB").is_some()){
         let mut ds=xf::vfs::DataSet::open(&installs)?;
         let root=ds.layers.iter().find_map(|l|match l{
             xf::vfs::Layer::Dir(p)=>p.parent().map(Path::to_path_buf),_=>None

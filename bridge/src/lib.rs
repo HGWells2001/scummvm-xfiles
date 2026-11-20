@@ -7,14 +7,12 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use xf::front::{self, Session, host, intro::Start};
 use xf::hdb::Hdb;
 mod prepare;
-mod restore;
-pub fn inspect_cd_folder(selected:&Path)->Result<usize,String>{
+pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
     let original=prepare::selected_root(selected)?;
-    let forks=restore::inspect(&original)?;
     let data=prepare::data_root(&original)?;
     read_database(&database(&data,"XFILES.HDB")?)?;
     read_database(&database(&data,"XFILES.GAM")?)?;
-    Ok(forks)
+    Ok(())
 }
 
 const PIXELS: usize = 640 * 480 * 3;
@@ -121,16 +119,10 @@ fn read_database(file: &Path) -> Result<Hdb,String> {
 
 #[no_mangle]
 pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, start: u32, error: *mut c_char, capacity: usize) -> *mut Bridge {
-    xfs_create_progress(data,saves,start,error,capacity,None,std::ptr::null_mut())
-}
-#[no_mangle]
-pub unsafe extern "C" fn xfs_create_progress(data: *const c_char, saves: *const c_char, start: u32, error: *mut c_char, capacity: usize,
-    progress:Option<unsafe extern "C" fn(*mut std::ffi::c_void,u32,u32)->i32>, context:*mut std::ffi::c_void) -> *mut Bridge {
     let result = catch_unwind(AssertUnwindSafe(|| -> Result<Box<Bridge>, String> {
         let original = prepare::selected_root(&path(data)?)?;
         let requested = path(saves)?;
         let saves = prepare::state_directory(&requested,&original)?;
-        restore::repair(&original,&mut |done,total|progress.map_or(true,|p|p(context,done as u32,total as u32)!=0))?;
         let data = prepare::data_root(&original)?;
         let title = Box::new(read_database(&database(&data,"XFILES.HDB")?)?);
         let base = Box::new(read_database(&database(&data,"XFILES.GAM")?)?);

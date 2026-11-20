@@ -25,7 +25,6 @@ int SDL_ResetHint(const char *);
 
 extern "C" {
 void *xfs_create(const char *,const char *,uint32,char *,size_t);
-void *xfs_create_progress(const char *,const char *,uint32,char *,size_t,int (*)(void *,uint32,uint32),void *);
 void xfs_destroy(void *);
 int xfs_tick(void *,uint32);
 int xfs_pointer(void *,uint32,int,int);
@@ -38,16 +37,6 @@ int xfs_cursor_shown(const void *);
 }
 namespace XFiles {
 namespace {
-int restoreProgress(void *context,uint32 done,uint32 total){
-	OSystem *system=static_cast<OSystem *>(context);
-	system->displayMessageOnOSD(Common::U32String::format("Ripristino dei file del gioco: %u/%u",done,total));
-	system->updateScreen();
-	Common::Event event;
-	while(system->getEventManager()->pollEvent(event)){
-		if(event.type==Common::EVENT_QUIT || (event.type==Common::EVENT_KEYDOWN && event.kbd.keycode==Common::KEYCODE_ESCAPE))return 0;
-	}
-	return 1;
-}
 // Set before the engine's graphics transaction recreates the SDL renderer.
 // Restore the previous hint when returning to the launcher.
 struct SoftwareVideoHint {
@@ -112,7 +101,7 @@ Common::Error ShilohEngine::run(){
 	initGraphics(640,480,nullptr);
 	_system->displayMessageOnOSD(Common::U32String("Preparazione del gioco..."));
 	_system->updateScreen();
-	void *core=xfs_create_progress(data.c_str(),saves.c_str(),boot==-1?1:boot==-3?2:0,message,sizeof(message),restoreProgress,_system);
+	void *core=xfs_create(data.c_str(),saves.c_str(),boot==-1?1:boot==-3?2:0,message,sizeof(message));
 	if(!core)return Common::Error(Common::kReadingFailed,message);
 	Runtime runtime(core,_mixer);
 	if(_system->getScreenFormat().bytesPerPixel<2)return Common::Error(Common::kUnsupportedColorMode);
