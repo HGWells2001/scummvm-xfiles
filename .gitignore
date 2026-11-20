@@ -9,3 +9,6 @@
 *.ilk
 scummvm-xfiles.ini
 preparazione-dati.log
+
+__pycache__/
+*.pyc

@@ -37,3 +37,14 @@ La compilazione non equivale a una partita completa verificata. Restano prove in
 Sorgente ScummVM fissato a 55c2973c1df5e8790b4248ae36a6b1b37842ce12. La copia di lavoro separata e in work/xfiles-upstream; i dati preparati sono in work/xfiles-data. Gli originali sono in D:\The X-Files e nei sette ISO adiacenti. Usare README.md per compilazione e avvio; nessun file originale del gioco viene pubblicato.
 La suite runtime 44782908237 e PASS: primo eseguibile Windows completo con core Shiloh collegato staticamente. Il pacchetto successivo aggiunge controllo delle DLL senza i percorsi della macchina di compilazione, avvio --list-engines e opzione locale -SmokeTest. Il test di una partita completa resta da eseguire.
 
+
+## Esito finale verificato
+Revisione di codice 8c40dd2caa986fc9fbe3a6acef451b42ff04929b: entrambe le suite completate con SUCCESS.
+- 44785250218: test C++/Python/Node, compilazione del motore e anteprima Windows PASS.
+- 44785250159: test ABI Rust, raccolta note dipendenze, runtime Windows e controllo autonomo delle DLL/registrazione motore PASS.
+Non restano suite di questa revisione in esecuzione. La build integrata e disponibile fra gli artefatti della suite runtime. Nessuna verifica di partita completa o qualita audio/video viene dichiarata.
+
+
+Artefatto runtime: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44785250159/artifacts/14653308848
+SHA256 ZIP: 80d028ed56209562f10818dc6f6f2dc0ce60aaa62e3bc9e3e3c0dc78808b60b9
+
