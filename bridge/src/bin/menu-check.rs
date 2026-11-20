@@ -24,7 +24,9 @@ fn main(){
         let mut ppm=b"P6\n640 480\n255\n".to_vec();ppm.extend(&frame);std::fs::write(Path::new(&args[3]).join(name),ppm).unwrap();
         assert!(left>10_000 && right>1000,"Menu artwork missing: left={left}, right={right}");
         assert_eq!(xfs_pointer(core,0,570,101),0);assert_eq!(xfs_pointer(core,1,570,101),0);assert_eq!(xfs_pointer(core,2,570,101),0);
-        assert_eq!(xfs_tick(core,16),0);assert_eq!(xfs_view(core),691,"New did not start the first scene");
+        // New restarts the session; its queued startup actions run on later ticks.
+        for _ in 0..120{assert_eq!(xfs_tick(core,16),0);if xfs_view(core)==691{break;}}
+        assert_eq!(xfs_view(core),691,"New did not start the first scene");
         println!("PASS: skip={skip}, menu after {elapsed}ms, left={left}, labels={right}, New view=691");
         xfs_destroy(core);
     }}
