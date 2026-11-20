@@ -15,6 +15,14 @@ Save slots and preferences are kept outside game data, in the selected ScummVM
 save directory's `xfiles-shiloh` subdirectory. This prototype uses the core's
 filesystem save format; integration with ScummVM's save browser is pending.
 
+For a Windows artifact, extract the entire ZIP and start `Avvia-XFiles.cmd`.
+The Italian launcher uses existing prepared data when available; otherwise it
+recovers the data forks from the seven local ISOs. Node.js 24 is needed for
+preparation only. It keeps its ScummVM settings separate from other installations.
+Paths can be supplied to `Prepara-e-Avvia.ps1` with `-GameDirectory`,
+`-IsoDirectory`, `-PreparedDirectory` and `-SaveDirectory`. `-PrepareOnly` prepares
+the data without starting ScummVM. No execution-policy setting is changed.
+
 This repository contains a native ScummVM detector, a NeoAccess database reader
 and a resource browser with QuickTime playback through ScummVM's own decoder.
 It does not run the original executable or yet interpret the game's scripts.

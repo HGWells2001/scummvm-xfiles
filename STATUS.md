@@ -38,3 +38,7 @@ Trovati 2061 record ISO associati/resource fork. Recupero corretto completato in
 Aggiunto backend opzionale nello stesso processo ScummVM: core Rust fissato a e3dfde0d098b25135a5243839d44842ccbc5fe91, input mouse/tastiera, framebuffer RGB, coda audio PCM, richieste Nuova partita/Carica/Esci e salvataggi separati dai dati originali. Backend ancora in verifica, nessuna partita completa dichiarata verificata. Il lettore C++ resta selezionabile.
 Corrette opzioni configure Windows: il pin usa --opengl-mode=none; --disable-opengl e --enable-scalers non sono opzioni valide.
 
+
+## Avviatore e verifiche integrazione
+Avviatore italiano aggiunto e verificato con -PrepareOnly sui dati locali corretti. Nessuna modifica alle policy PowerShell. Parser PowerShell e test ISO PASS. Il wrapper C++ del runtime compila localmente con USE_XFILES_SHILOH. La suite Rust iniziale e PASS su Linux; build Windows integrata ancora in corso. Aggiunti controlli sui database e salvataggi esterni ai dati; un nuovo test verifica il rifiuto di database corrotti prima di creare la sessione. Profilo di sviluppo Rust senza LTO per ridurre i tempi di compilazione.
+

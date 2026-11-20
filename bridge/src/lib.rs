@@ -67,7 +67,7 @@ impl Bridge {
                 if file.parent() != Some(self.saves.as_path()) || file.extension().is_none_or(|x| !x.to_string_lossy().eq_ignore_ascii_case("x")) {
                     return Err("Save path outside this game's save directory".into());
                 }
-                let gam = Hdb::open(&file).map_err(|e| e.to_string())?;
+                let gam = read_database(&file)?;
                 self.restart(Some(Box::new(gam)), Start::Menu);
             }
             None => {}
@@ -93,6 +93,21 @@ fn database(root: &Path, name: &str) -> Result<PathBuf, String> {
         .filter_map(Result::ok).find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(name))
         .map(|e| e.path()).ok_or_else(|| format!("Missing {name}; use the prepared data directory"))
 }
+fn read_database(file: &Path) -> Result<Hdb,String> {
+    let size=std::fs::metadata(file).map_err(|e|e.to_string())?.len();
+    if !(24..=128*1024*1024).contains(&size) {return Err("Invalid database size".into());}
+    let h=Hdb::open(file).map_err(|e|e.to_string())?;
+    if h.version!=0x501 || !(1..=5).contains(&h.app_version) || h.nclasses==0 || h.nclasses>4096 || h.classes.len()!=h.nclasses as usize {
+        return Err("Unsupported or inconsistent NeoAccess database".into());
+    }
+    for c in &h.classes {
+        if c.objects.len()!=c.count as usize {return Err("Database object count mismatch".into());}
+        for &(_,mark) in &c.objects {
+            if mark==0 || mark as usize+6>h.d.len() {return Err("Database record outside file".into());}
+        }
+    }
+    Ok(h)
+}
 
 #[no_mangle]
 pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, start: u32, error: *mut c_char, capacity: usize) -> *mut Bridge {
@@ -105,8 +120,8 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         std::fs::create_dir_all(&saves).map_err(|e| e.to_string())?;
         let saves = saves.canonicalize().map_err(|e| e.to_string())?;
         if saves.starts_with(&data) { return Err("Save directory must be outside original game data".into()); }
-        let title = Box::new(Hdb::open(database(&data,"XFILES.HDB")?).map_err(|e| e.to_string())?);
-        let base = Box::new(Hdb::open(database(&data,"XFILES.GAM")?).map_err(|e| e.to_string())?);
+        let title = Box::new(read_database(&database(&data,"XFILES.HDB")?)?);
+        let base = Box::new(read_database(&database(&data,"XFILES.GAM")?)?);
         let title = Box::into_raw(title); let base = Box::into_raw(base);
         let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new() });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
@@ -204,5 +219,19 @@ mod tests {
         let mut err=[42i8;8];
         let p=xfs_create(std::ptr::null(),std::ptr::null(),0,err.as_mut_ptr(),err.len());
         assert!(p.is_null());assert_eq!(err[7],0);
+    }}
+    #[test] fn corrupt_database_is_rejected_before_session_creation() { unsafe {
+        let unique=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root=std::env::temp_dir().join(format!("xfiles-bridge-test-{unique}"));
+        let data=root.join("data");let saves=root.join("saves");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("XFILES.HDB"),[0u8;24]).unwrap();
+        std::fs::write(data.join("XFILES.GAM"),[0u8;24]).unwrap();
+        let data=std::ffi::CString::new(data.to_str().unwrap()).unwrap();
+        let saves=std::ffi::CString::new(saves.to_str().unwrap()).unwrap();
+        let mut err=[0i8;256];
+        let h=xfs_create(data.as_ptr(),saves.as_ptr(),0,err.as_mut_ptr(),err.len());
+        assert!(h.is_null());
+        assert!(CStr::from_ptr(err.as_ptr()).to_string_lossy().contains("database"));
     }}
 }

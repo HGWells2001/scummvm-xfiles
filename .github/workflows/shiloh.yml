@@ -17,6 +17,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Check ABI library and run bridge tests
         run: cargo test --manifest-path bridge/Cargo.toml --lib
+      - name: Record resolved dependency lock for review
+        run: cat bridge/Cargo.lock
   windows-runtime:
     runs-on: windows-latest
     defaults:
@@ -27,6 +29,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-gnu
+      - uses: actions/cache@v4
+        with:
+          path: |
+            bridge/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rust-bridge-${{ runner.os }}-gnu-${{ hashFiles('bridge/Cargo.toml') }}
+          restore-keys: rust-bridge-${{ runner.os }}-gnu-
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -59,6 +69,9 @@ jobs:
           cp ../bridge/target/x86_64-pc-windows-gnu/release/smoke.exe ../runtime/xfiles-shiloh-smoke.exe
           cp ../README.md ../LICENSE ../THIRD_PARTY.md ../runtime/
           cp ../bridge/SHILOH-NOTICES.txt ../runtime/
+          cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles.cmd ../runtime/
+          mkdir -p ../runtime/tools
+          cp ../tools/prepare_data.mjs ../runtime/tools/
       - uses: actions/upload-artifact@v4
         with:
           name: ScummVM-XFiles-Shiloh-experimental-Windows

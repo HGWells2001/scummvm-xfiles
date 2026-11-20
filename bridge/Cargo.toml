@@ -14,5 +14,6 @@ xf = { git = "https://github.com/Asterber/shiloh.git", rev = "e3dfde0d098b25135a
 
 [profile.release]
 panic = "unwind"
-lto = "thin"
-codegen-units = 1
+lto = false
+codegen-units = 8
+opt-level = 2

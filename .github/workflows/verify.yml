@@ -61,6 +61,9 @@ jobs:
           cp scummvm.exe ../preview/
           ldd scummvm.exe | awk '/\/mingw64\/bin\// {print $3}' | while read -r dll; do cp "$dll" ../preview/; done
           cp ../README.md ../LICENSE ../THIRD_PARTY.md ../preview/
+          cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles.cmd ../preview/
+          mkdir -p ../preview/tools
+          cp ../tools/prepare_data.mjs ../preview/tools/
       - uses: actions/upload-artifact@v4
         with:
           name: ScummVM-XFiles-Windows-preview
