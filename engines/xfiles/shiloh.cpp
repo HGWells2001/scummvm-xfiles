@@ -4,6 +4,7 @@
 #include "shiloh.h"
 #ifdef USE_XFILES_SHILOH
 #include "common/config-manager.h"
+#include "common/error.h"
 #include "common/events.h"
 #include "common/system.h"
 #include "common/textconsole.h"
