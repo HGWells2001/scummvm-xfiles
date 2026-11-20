@@ -15,6 +15,17 @@ code using ScummVM's video/audio APIs. Shiloh's MIT notice is reproduced below.
 VCAction, condition and procedure layouts additionally reference
 `port/src/world/action.rs` at the same pinned revision.
 
+The Windows GUI package also includes a minimal FFmpeg 8.0 executable for local
+QDMC-to-PCM preparation, built from commit
+140fd653aed8cad774f991ba083e2d01e86420c7 of https://github.com/FFmpeg/FFmpeg.
+It is built without GPL/nonfree options, with the MOV demuxer, QDMC decoder,
+PCM encoder and required audio conversion filters. Its LGPL 2.1 license and
+source/build reference are shipped beside xfiles-audio-decoder.exe; the exact
+rebuild command is tools/build_audio_decoder.sh in this repository. No game
+files or prepared audio are included in that executable or distributed here.
+
+Shiloh notice:
+
 MIT License
 
 Copyright (c) 2026 The Shiloh contributors

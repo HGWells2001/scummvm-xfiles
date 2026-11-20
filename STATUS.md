@@ -98,3 +98,24 @@ SHA256: 92002093766e93fe06e4266bb96ecaf82032bf11bf71a6688080f2e9ddfcd5e2
 
 Runtime completo: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44796666340/artifacts/14659311690
 SHA256: 141ca40267dfed5ba29f7ac2a72613fbf2f31bbead5c3c0015639f3ecef40399
+
+## Avvio normale dalla GUI e cartella unificata dei CD
+
+Revisione 00c55e34d09a91b458581477b78512ef1789e452. Il bridge monta il layout dei CD come vista di sola lettura: MININST, MEDINST, poi la cartella principale con media e NAV*.NMV. Funziona anche con la cartella installata/preparata. La selezione di MININST viene ricondotta alla cartella principale quando questa contiene i media. Verifica X.PFF e segnala copie di resource fork incomplete.
+
+Preparazione QDMC integrata nel bridge Rust: decoder FFmpeg 8.0 minimale, compilato da 140fd653aed8cad774f991ba083e2d01e86420c7, incluso come xfiles-audio-decoder.exe (1406976 byte). Non servono Node.js, ffprobe o FFmpeg installati per l'avvio dalla GUI. La preparazione usa soltanto copie temporanee dei filmati QDMC nella cache, senza ricopiare tutto il gioco o modificare i CD. Il renderer software viene selezionato internamente prima della transazione grafica su Windows; il precedente hint SDL viene ripristinato all'uscita dal motore.
+
+Verifiche:
+- Test Rust con fixture MININST/MEDINST e precedenza corretta, media nelle sottocartelle, selezione MININST e isolamento salvataggi PASS.
+- Suite 44802206294 SUCCESS: bridge Rust, decoder minimale, runtime Windows e controllo autonomo delle DLL. La precedente prova aveva rilevato un uso errato dell'API size: corretto usando io::fs().size().
+- Suite 44801861376 SUCCESS per detector, test database/Node/Python, avviatore e compilazioni Linux/Windows del codice C++ invariato nella correzione Rust. Controllo sintattico locale MinGW dell'host opzionale PASS.
+- Copia di prova di 3031 file reali con database/eseguibili/PFF in MININST, NAVM in MEDINST, NAV1..7 alla radice e media in XV/XN/XS/XG/XT.
+- Riconoscimento ScummVM: aggiunto esattamente un target xfiles-win dalla cartella principale, percorso salvato alla radice (non MININST).
+- PATH limitato a Windows System32, nessun XF_FFMPEG/XF_CACHE, nessun Node o decoder esterno: smoke nativo sui CD con 15 audio preparati, view=691, 434481 byte RGB non nulli e 175096 campioni audio non nulli in 120 tick.
+- Avvio reale dalla finestra italiana di ScummVM, pulsante Gioca: video introduttivo visibile senza CMD o variabili video esterne. Cache gia pronta: 0 preparati, 15 riutilizzati.
+- Prima esecuzione dalla stessa GUI con un'altra cache vuota: 15 preparati, 0 riutilizzati, menu completo visibile dopo i filmati. Percorso salvataggi isolato impostato nel profilo di prova.
+
+Tutte le suite avviate sono terminate. La verifica riguarda riconoscimento, avvio GUI, prima scena e preparazione audio; la partita completa resta da verificare. I tre slot nel menu del gioco rimangono il sistema di salvataggio del prototipo: il browser globale ScummVM non e implementato.
+
+Pacchetto GUI: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44802206294/artifacts/14662191211
+SHA256 ZIP: f9c3aba9533c95576a6eaeb61b8c302a81179e4423423b46ca8612817af8911a

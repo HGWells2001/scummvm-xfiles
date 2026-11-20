@@ -1,5 +1,31 @@
 # The X-Files Game (1998) for ScummVM
 
+## Windows: avvio dall'interfaccia di ScummVM
+
+[Scarica la build Windows con avvio dalla GUI](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44802206294/artifacts/14662191211).
+
+1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
+2. Copia il contenuto dei sette CD in un'unica cartella del gioco, unendo le
+   sottocartelle e mantenendo i nomi originali (MININST, MEDINST, XV, XN, XS, XG,
+   XT e i file NAV*.NMV). Non appiattire tutte le sottocartelle.
+3. Apri scummvm.exe di questa build, scegli **Aggiungi gioco** e seleziona la cartella principale.
+4. Conferma e premi **Gioca**. Puoi usare anche XFiles-DatiPreparati gia creata.
+
+Questa build legge direttamente sia il layout dei CD sia quello installato.
+Il decoder audio necessario e incluso: la prima preparazione avviene nel motore,
+senza Node.js, ffprobe, installazioni aggiuntive o avviatori CMD/PowerShell.
+Cache e salvataggi sono conservati fuori dalla cartella del gioco. Il percorso
+dei salvataggi segue le impostazioni di ScummVM; i tre slot del gioco restano
+nel suo menu originale. L'integrazione con il browser globale dei salvataggi di
+ScummVM non e ancora implementata.
+
+Su Windows il motore imposta il renderer software prima di inizializzare il video.
+Se i file copiati sono resource fork anziche dati completi (per esempio X.PFF da
+286 byte), il motore segnala il problema: usa una copia corretta dei CD o la
+cartella XFiles-DatiPreparati gia verificata.
+
+## Stato e dettagli per sviluppatori
+
 **Experimental integration. A complete playthrough has not been validated.**
 
 The **in-process Shiloh runtime** is under integration and validation.
@@ -17,7 +43,9 @@ Save slots and preferences are kept outside game data, in the selected ScummVM
 save directory's `xfiles-shiloh` subdirectory. This prototype uses the core's
 filesystem save format; integration with ScummVM's save browser is pending.
 
-For a Windows artifact, extract the entire ZIP and start `Avvia-XFiles.cmd`.
+## Older Windows builds and optional preparation scripts
+
+For the older Windows artifact below, extract the entire ZIP and start `Avvia-XFiles.cmd`.
 The [runtime package with software video fallback and GUI resources](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44796666340/artifacts/14659311690)
 passed the Windows checks at revision `1fe502c4eb65895e600687106f8291bf653eabd0`.
 The Italian launcher uses existing prepared data when available; otherwise it
@@ -145,7 +173,10 @@ Common containers is required before proposing upstream inclusion.
 See [STATUS.md](STATUS.md) and [THIRD_PARTY.md](THIRD_PARTY.md).
 No original game data, executable or decompiled game code is distributed.
 
-## QDMC audio preparation
+## Legacy scripted QDMC audio preparation
+
+The following helper is retained for older runtime packages. The new GUI build
+prepares its own audio natively and ships a minimal FFmpeg QDMC decoder.
 
 The New Game opening movie (XV/64421.XMV), music and several later movies use
 QDesign Music (QDMC). The pinned Shiloh core consumes a verified PCM cache for
