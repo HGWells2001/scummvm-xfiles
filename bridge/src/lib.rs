@@ -95,7 +95,7 @@ fn database(root: &Path, name: &str) -> Result<PathBuf, String> {
         .map(|e| e.path).ok_or_else(|| format!("Missing {name} in the selected game directory"))
 }
 fn read_database(file: &Path) -> Result<Hdb,String> {
-    let size=xf::io::size(file).map_err(|e|e.to_string())?;
+    let size=xf::io::fs().size(file).map_err(|e|e.to_string())?;
     if !(24..=128*1024*1024).contains(&size) {return Err("Invalid database size".into());}
     let h=Hdb::open(file).map_err(|e|e.to_string())?;
     if h.version!=0x501 || !(1..=5).contains(&h.app_version) || h.nclasses==0 || h.nclasses>4096 || h.classes.len()!=h.nclasses as usize {
@@ -113,12 +113,17 @@ fn read_database(file: &Path) -> Result<Hdb,String> {
 #[no_mangle]
 pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, start: u32, error: *mut c_char, capacity: usize) -> *mut Bridge {
     let result = catch_unwind(AssertUnwindSafe(|| -> Result<Box<Bridge>, String> {
-        let original = path(data)?.canonicalize().map_err(|e| e.to_string())?;
+        let original = prepare::selected_root(&path(data)?)?;
         let data = prepare::data_root(&original)?;
         let requested = path(saves)?;
         let saves = prepare::state_directory(&requested,&original)?;
         let title = Box::new(read_database(&database(&data,"XFILES.HDB")?)?);
         let base = Box::new(read_database(&database(&data,"XFILES.GAM")?)?);
+        let media=xf::media::MediaLib::new(&data);
+        let pictures=media.find("x.pff").ok_or("Manca X.PFF: copia anche i file delle cartelle MININST e MEDINST dei CD.")?;
+        if xf::io::read_range(pictures,0,4).map_err(|e|e.to_string())?.as_slice()!=b"PFF " {
+            return Err("X.PFF non contiene i dati completi del gioco. Ricopia i file dati dei CD oppure seleziona la cartella XFiles-DatiPreparati gia preparata.".into());
+        }
         prepare::audio_cache(&data,&saves,&original)?;
         let title = Box::into_raw(title); let base = Box::into_raw(base);
         let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new() });

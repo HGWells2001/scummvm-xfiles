@@ -3,6 +3,23 @@ use std::path::{Path,PathBuf};
 use std::process::{Command,Stdio};
 use xf::media::{MediaLib,audio::{self,Pcm},pcmcache,qt::Movie};
 
+pub fn selected_root(selected:&Path)->Result<PathBuf,String>{
+    let selected=selected.canonicalize().map_err(|e|e.to_string())?;
+    let install=selected.file_name().is_some_and(|n|{
+        let n=n.to_string_lossy();n.eq_ignore_ascii_case("MININST")||n.eq_ignore_ascii_case("MEDINST")
+    });
+    if install {
+        if let Some(parent)=selected.parent(){
+            let has_media=std::fs::read_dir(parent).ok().is_some_and(|rd|rd.flatten().any(|e|{
+                let name=e.file_name();let name=name.to_string_lossy();
+                name.eq_ignore_ascii_case("XV")||name.eq_ignore_ascii_case("NAV1.NMV")
+            }));
+            if has_media{return Ok(parent.to_path_buf());}
+        }
+    }
+    Ok(selected)
+}
+
 pub fn data_root(selected:&Path)->Result<PathBuf,String>{
     static INIT:std::sync::OnceLock<bool>=std::sync::OnceLock::new();
     if !*INIT.get_or_init(xf::vfs::install){return Err("Game file backend unavailable".into());}
@@ -96,6 +113,7 @@ pub fn audio_cache(data:&Path,saves:&Path,original:&Path)->Result<(),String>{
         std::fs::write(data.join("MEDINST/X.PFF"),b"PFF secondary").unwrap();
         std::fs::write(data.join("XV/64421.XMV"),b"movie").unwrap();
         let selected=data.canonicalize().unwrap();let merged=data_root(&selected).unwrap();
+        assert_eq!(selected_root(&data.join("MININST")).unwrap(),selected);
         let lib=MediaLib::new(&merged);
         assert_eq!(xf::io::read(lib.find("xfiles.hdb").unwrap()).unwrap(),b"database");
         assert_eq!(xf::io::read(lib.find("x.pff").unwrap()).unwrap(),b"PFF preferred");
