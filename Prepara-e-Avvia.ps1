@@ -98,6 +98,9 @@ try {
         $arguments += '--boot-param=-1'
     }
     & $executable @arguments 'xfiles:xfiles'
+    if ($LASTEXITCODE -eq -1073741515) {
+        throw 'ScummVM non trova una DLL richiesta. Estrai tutto il pacchetto Windows, comprese le DLL, nella stessa cartella; non copiare soltanto scummvm.exe.'
+    }
     exit $LASTEXITCODE
 } catch {
     Write-Error $_.Exception.Message -ErrorAction Continue
