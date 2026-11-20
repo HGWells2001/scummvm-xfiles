@@ -25,6 +25,9 @@ def main():
     if os.name != "nt":
         parser.error("Run this executable-package check on Windows")
     executable = args.directory.resolve() / "scummvm.exe"
+    for name in ("fonts.dat", "scummremastered.zip", "translations.dat", "Avvia-XFiles-Video-Compatibile.cmd"):
+        if not (executable.parent / name).is_file():
+            raise RuntimeError(f"Incomplete Windows package: missing {name}")
     env = standalone_environment(os.environ)
     for option in ["--version", "--list-engines"]:
         result = subprocess.run(

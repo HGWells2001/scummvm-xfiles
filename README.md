@@ -36,6 +36,14 @@ the experimental runtime package.
 SDL's dummy drivers, then exits. It is a startup check, not a playthrough or an
 audio/visual quality check.
 
+If the window stays black while audio plays, try `Avvia-XFiles-Video-Compatibile.cmd`.
+It uses SDL's Windows software renderer in a window, with a separate ScummVM
+configuration and `xfiles-video.log` beside the executable. It reuses prepared
+data beside the package or in `D:\XFiles-DatiPreparati`; a data directory can also
+be dropped onto the CMD file. This is a display compatibility fallback, not a
+confirmed diagnosis of every black-screen report. Its settings are process-local.
+Windows artifacts include ScummVM's fonts, default theme and translations.
+
 Two build artifacts are intentionally distinct:
 
 | Artifact | Behavior | Validation scope |

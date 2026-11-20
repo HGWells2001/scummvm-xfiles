@@ -7,7 +7,7 @@ on:
       - 'tests/**'
       - 'CMakeLists.txt'
       - 'Prepara-e-Avvia.ps1'
-      - 'Avvia-XFiles.cmd'
+      - 'Avvia-XFiles*.cmd'
       - '.github/workflows/verify.yml'
   pull_request:
   workflow_dispatch:
@@ -80,7 +80,8 @@ jobs:
           cp scummvm.exe ../preview/
           ldd scummvm.exe | awk '/\/mingw64\/bin\// {print $3}' | while read -r dll; do cp "$dll" ../preview/; done
           cp ../README.md ../LICENSE ../THIRD_PARTY.md ../preview/
-          cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles.cmd ../preview/
+          cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles*.cmd ../preview/
+          cp dists/engine-data/fonts.dat gui/themes/scummremastered.zip gui/themes/translations.dat ../preview/
           mkdir -p ../preview/tools
           cp ../tools/prepare_data.mjs ../preview/tools/
       - uses: actions/upload-artifact@v4

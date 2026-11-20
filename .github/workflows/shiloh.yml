@@ -9,7 +9,7 @@ on:
       - 'tools/collect_rust_notices.py'
       - 'tools/verify_windows_package.py'
       - 'Prepara-e-Avvia.ps1'
-      - 'Avvia-XFiles.cmd'
+      - 'Avvia-XFiles*.cmd'
   pull_request:
   workflow_dispatch:
 permissions:
@@ -86,7 +86,8 @@ jobs:
           cp ../README.md ../LICENSE ../THIRD_PARTY.md ../runtime/
           cp ../bridge/SHILOH-NOTICES.txt ../runtime/
           cp ../bridge/RUNTIME-DEPENDENCIES.txt ../runtime/
-          cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles.cmd ../runtime/
+          cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles*.cmd ../runtime/
+          cp dists/engine-data/fonts.dat gui/themes/scummremastered.zip gui/themes/translations.dat ../runtime/
           mkdir -p ../runtime/tools
           cp ../tools/prepare_data.mjs ../runtime/tools/
       - name: Verify packaged DLL closure and engine registration

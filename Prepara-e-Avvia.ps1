@@ -91,7 +91,7 @@ try {
     New-Item -ItemType Directory -Path $SaveDirectory -Force | Out-Null
     $config = Join-Path $scriptDirectory 'scummvm-xfiles.ini'
     Write-Host "Avvio ScummVM con i dati in: $data"
-    $arguments = @("--config=$config", "--path=$data", "--savepath=$SaveDirectory")
+    $arguments = @("--config=$config", "--path=$data", "--savepath=$SaveDirectory", "--extrapath=$scriptDirectory", "--themepath=$scriptDirectory", "--logfile=$(Join-Path $scriptDirectory 'xfiles-runtime.log')")
     if ($SmokeTest) {
         $env:SDL_VIDEODRIVER = 'dummy'
         $env:SDL_AUDIODRIVER = 'dummy'
