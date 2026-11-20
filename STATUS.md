@@ -136,3 +136,25 @@ Il ripristino sulla cartella reale avviene quando l'utente avvia questa build no
 
 Pacchetto: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44809454418/artifacts/14663524115
 SHA256 ZIP: 051ffa5f2880b58b2aaf54c621022d99d8df2c69635ddddc19e6ab3b43400129
+
+## Menu dopo l'intro e riconoscimento dell'edizione italiana
+
+Il menu mancante sulla prima copia dipendeva anche da resource fork Macintosh non vuoti: MININST/XG/49583.XMV e 49587.XMV misuravano 748 e 750 byte, quindi il vecchio controllo limitato a 286 byte non li recuperava. Questi file nascondevano i dati validi dei livelli successivi. Il recupero ora verifica intervalli e dimensioni del resource fork e la copia della sua intestazione nella mappa. Non usa una sola soglia di dimensione. Aggiunto test per metadata QuickTime non vuoti, mappa non corrispondente e sezioni troncate.
+
+Su una replica della prima copia il motore ha recuperato altri 245 file, conservando 1745 backup complessivi con quelli precedenti. Il frame dopo la conclusione naturale dell'intro mostra il menu completo. La diagnostica di sola lettura sulla cartella reale D:\The X-Files, eseguita successivamente, trova 0 resource fork da recuperare.
+
+Edizione italiana in D:\Nuova cartella (12): riconoscimento mediante coppia esatta di dimensioni e MD5 dei primi 5000 byte, conforme al detector ScummVM:
+- XFILES.HDB: 6074064 byte, de4e775a71d05ba0b5c5c7b0d71d6b3a.
+- XFILES.GAM: 155544 byte, 9fc99da2d65bee17e6bd9cf1f7b3fd59.
+- Lingua IT_ITA, piattaforma Windows; nessun indebolimento del riconoscimento dell'altra edizione.
+
+La copia italiana esaminata non contiene resource fork incompleti e si apre direttamente con MININST/MEDINST e i media della cartella principale. I dati restano quelli della versione italiana. Con il medesimo bridge della nuova build, provato direttamente sui suoi file: 14 audio QDMC preparati, menu con Nuovo/Carica/Opzioni/Aiuto/Esci, prima scena view=691, 434481 byte RGB non nulli e 175096 campioni PCM non nulli in 120 tick. Cache e salvataggi di prova sono esterni ai dati del gioco. La partita completa e le funzioni successive all'avvio restano da verificare per questa edizione.
+
+Build finale a7ef3fe16eabb75d42164d83c589fcec480410a4:
+- Suite 44813870553 SUCCESS; suite 44813601486 e 44813601523 SUCCESS. Tutte terminate.
+- Pacchetto scaricato e verificato tramite SHA256. ScummVM aggiunge esattamente un gioco dalla cartella italiana: target xfiles-win-it, language=it, platform=windows, percorso D:\Nuova cartella (12)\.
+- xfiles-menu-check sulla copia italiana con PATH limitato a System32: conclusione naturale dell'intro e menu interattivo dopo 147000 ms simulati, oppure dopo 10500 ms saltando i quattro filmati. In entrambi i casi il frame include menu e voci; il click su Nuovo raggiunge view=691. La prova attende l'esecuzione delle azioni di avvio accodate dal motore.
+- Stessa prova sulla replica della prima edizione ripristinata: PASS sia con conclusione naturale sia saltando i filmati; menu completo e New raggiunge view=691. Nessun ISO o decoder esterno nel PATH richiesto per questi avvii.
+
+Pacchetto Windows: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44813870553/artifacts/14668384187
+SHA256 ZIP: 08978e571f2f1d66f86b9a8f483d30434daacf2b0ce7ce197392dcc65b453f32

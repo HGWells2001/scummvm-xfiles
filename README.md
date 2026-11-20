@@ -2,11 +2,11 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows per la cartella originale](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44809454418/artifacts/14663524115).
+[Scarica la build Windows con riconoscimento italiano e menu corretto](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44813870553/artifacts/14668384187).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
-2. Usa la cartella originale **D:\The X-Files**.
-3. Apri scummvm.exe di questa build, scegli **Aggiungi gioco** e seleziona **D:\The X-Files**.
+2. Usa la cartella originale **D:\The X-Files** oppure la versione italiana in **D:\Nuova cartella (12)**.
+3. Apri scummvm.exe di questa build, scegli **Aggiungi gioco** e seleziona la cartella principale desiderata.
 4. Conferma e premi **Gioca**.
 
 Per altre copie dei CD, unisci il contenuto dei sette dischi mantenendo le
@@ -23,8 +23,9 @@ nel suo menu originale. L'integrazione con il browser globale dei salvataggi di
 ScummVM non e ancora implementata.
 
 Su Windows il motore imposta il renderer software prima di inizializzare il video.
-La cartella originale esaminata contiene 1500 resource fork Macintosh vuoti da
-286 byte al posto dei dati completi. Al primo avvio il motore verifica che i
+La prima copia esaminata contiene resource fork Macintosh al posto dei dati
+completi: alcuni vuoti da 286 byte, altri piu grandi, compresi i filmati del menu.
+Il motore riconosce la struttura del resource fork e verifica che i
 sette ISO originali accanto alla cartella corrispondano a XFILES.HDB e XFILES.GAM,
 quindi ripristina i file incompleti nella stessa cartella. Conserva gli originali
 in D:\The X-Files\.xfiles-resourcefork-backup e sostituisce i singoli file in modo
@@ -35,6 +36,11 @@ Per questa copia gli ISO sono D:\The_X-Files_-_The_Game_CD1.iso fino a CD7.iso.
 Servono per il ripristino iniziale: dopo, il gioco legge i file recuperati da
 D:\The X-Files. Una copia gia completa dei CD non richiede questo ripristino.
 Il controllo diagnostico xfiles-folder-check.exe CARTELLA e di sola lettura.
+
+La versione italiana viene identificata dai suoi XFILES.HDB e XFILES.GAM come
+**Italiano / Windows**, con un target separato dall'altra edizione. La copia
+italiana esaminata contiene gia i dati completi: non richiede il recupero dagli
+ISO. Audio, testi e filmati restano quelli dei suoi file originali.
 
 ## Stato e dettagli per sviluppatori
 
