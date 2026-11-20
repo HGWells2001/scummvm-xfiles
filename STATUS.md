@@ -119,3 +119,20 @@ Tutte le suite avviate sono terminate. La verifica riguarda riconoscimento, avvi
 
 Pacchetto GUI: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44802206294/artifacts/14662191211
 SHA256 ZIP: f9c3aba9533c95576a6eaeb61b8c302a81179e4423423b46ca8612817af8911a
+
+## Avvio dalla cartella originale D:\The X-Files
+
+Revisione a67224002499aae210ef68a48cd30ee1cafa5291. Il file dell'installer LAYOUT.BIN non viene piu scambiato per un'immagine CD: il motore monta esplicitamente MININST, MEDINST e la cartella selezionata. Il riconoscimento sulla cartella reale D:\The X-Files aggiunge un solo target xfiles-win e conserva quel percorso.
+
+La copia originale conteneva 1500 resource fork Macintosh vuoti da 286 byte al posto dei dati. Il ripristino integrato riconosce la firma completa iniziale insieme alla dimensione, include i media dentro MININST/MEDINST e conserva i file validi della stessa dimensione. Verifica integralmente HDB/GAM degli ISO e tutti i percorsi sorgente prima di iniziare. Conserva ogni originale in .xfiles-resourcefork-backup e sostituisce ciascun file tramite scrittura temporanea e rinomina; Esc interrompe e il successivo avvio riprende. I sette ISO locali servono soltanto a recuperare i dati mancanti: il runtime legge poi dalla cartella selezionata.
+
+Verifiche della versione:
+- Suite 44809454418 SUCCESS: 6 test Rust, compilazione Windows, decoder QDMC e controllo delle DLL. Suite generale 44807270856 SUCCESS per le modifiche C++ precedenti; controllo sintattico MinGW dell'host corrente PASS. Tutte le suite avviate sono terminate.
+- Diagnostica di sola lettura sulla cartella reale D:\The X-Files: database caricati dai tre livelli corretti; 533 resource fork ancora incompleti con sorgenti ISO corrispondenti verificate. Questa verifica non ripristina i file.
+- Replica in workspace con tutti i 1500 resource fork originali, incluse le sottocartelle, e LAYOUT.BIN reale: avvio mediante Gioca nella GUI italiana, 1500 file recuperati, 1500 backup, 15 audio preparati. LAYOUT.BIN mantiene lo stesso SHA256.
+- Avvio successivo della replica senza XFILES_DISC_DIRECTORY, XF_CACHE, XF_FFMPEG e con PATH limitato a System32: 0 resource fork incompleti, nessun ISO necessario, 0 audio preparati e 15 riutilizzati. Smoke di 120 tick: view=691, 434481 byte RGB non nulli, 175096 campioni audio non nulli.
+
+Il ripristino sulla cartella reale avviene quando l'utente avvia questa build normalmente. La partita completa resta da verificare.
+
+Pacchetto: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44809454418/artifacts/14663524115
+SHA256 ZIP: 051ffa5f2880b58b2aaf54c621022d99d8df2c69635ddddc19e6ab3b43400129

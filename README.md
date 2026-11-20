@@ -2,14 +2,17 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows con avvio dalla GUI](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44802206294/artifacts/14662191211).
+[Scarica la build Windows per la cartella originale](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44809454418/artifacts/14663524115).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
-2. Copia il contenuto dei sette CD in un'unica cartella del gioco, unendo le
-   sottocartelle e mantenendo i nomi originali (MININST, MEDINST, XV, XN, XS, XG,
-   XT e i file NAV*.NMV). Non appiattire tutte le sottocartelle.
-3. Apri scummvm.exe di questa build, scegli **Aggiungi gioco** e seleziona la cartella principale.
-4. Conferma e premi **Gioca**. Puoi usare anche XFiles-DatiPreparati gia creata.
+2. Usa la cartella originale **D:\The X-Files**.
+3. Apri scummvm.exe di questa build, scegli **Aggiungi gioco** e seleziona **D:\The X-Files**.
+4. Conferma e premi **Gioca**.
+
+Per altre copie dei CD, unisci il contenuto dei sette dischi mantenendo le
+sottocartelle MININST, MEDINST, XV, XN, XS, XG, XT e i file NAV*.NMV.
+I file dell'installazione come LAYOUT.BIN vengono conservati e non vengono
+scambiati per immagini CD.
 
 Questa build legge direttamente sia il layout dei CD sia quello installato.
 Il decoder audio necessario e incluso: la prima preparazione avviene nel motore,
@@ -20,9 +23,18 @@ nel suo menu originale. L'integrazione con il browser globale dei salvataggi di
 ScummVM non e ancora implementata.
 
 Su Windows il motore imposta il renderer software prima di inizializzare il video.
-Se i file copiati sono resource fork anziche dati completi (per esempio X.PFF da
-286 byte), il motore segnala il problema: usa una copia corretta dei CD o la
-cartella XFiles-DatiPreparati gia verificata.
+La cartella originale esaminata contiene 1500 resource fork Macintosh vuoti da
+286 byte al posto dei dati completi. Al primo avvio il motore verifica che i
+sette ISO originali accanto alla cartella corrispondano a XFILES.HDB e XFILES.GAM,
+quindi ripristina i file incompleti nella stessa cartella. Conserva gli originali
+in D:\The X-Files\.xfiles-resourcefork-backup e sostituisce i singoli file in modo
+atomico, senza sovrascrivere i dati gia validi. Esc interrompe la preparazione;
+un avvio successivo riprende i file ancora incompleti.
+
+Per questa copia gli ISO sono D:\The_X-Files_-_The_Game_CD1.iso fino a CD7.iso.
+Servono per il ripristino iniziale: dopo, il gioco legge i file recuperati da
+D:\The X-Files. Una copia gia completa dei CD non richiede questo ripristino.
+Il controllo diagnostico xfiles-folder-check.exe CARTELLA e di sola lettura.
 
 ## Stato e dettagli per sviluppatori
 
@@ -98,9 +110,9 @@ The native C++ research frontend implements:
 ## Local edition examined
 
 The supplied directory is laid out like installation media. Its databases are
-under `MININST`, rather than at the top level. Add **`D:\The X-Files\MININST`**
-to an experimental ScummVM build. Detection also searches MININST/MEDINST from
-the parent directory. Language has deliberately been left unknown until verified.
+under `MININST`, rather than at the top level. Add **`D:\The X-Files`**
+to this experimental ScummVM build. Detection searches MININST/MEDINST from
+the selected directory. Language has deliberately been left unknown until verified.
 
 **Media extraction issue found:** ISO9660 associated records (flag `0x04`) share
 filenames with the real data forks on these hybrid discs. The supplied folder has
