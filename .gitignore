@@ -2,6 +2,7 @@
 /reports/local/
 /upstream/
 /bridge/target/
+/bridge/RUNTIME-DEPENDENCIES.txt
 *.obj
 *.exe
 *.pdb

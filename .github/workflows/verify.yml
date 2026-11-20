@@ -1,5 +1,16 @@
 name: Verify experimental engine
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    paths:
+      - 'engines/**'
+      - 'tools/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - 'Prepara-e-Avvia.ps1'
+      - 'Avvia-XFiles.cmd'
+      - '.github/workflows/verify.yml'
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

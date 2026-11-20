@@ -5,6 +5,10 @@ on:
       - 'bridge/**'
       - 'engines/xfiles/**'
       - '.github/workflows/shiloh.yml'
+      - 'tools/install_engine.py'
+      - 'tools/collect_rust_notices.py'
+      - 'Prepara-e-Avvia.ps1'
+      - 'Avvia-XFiles.cmd'
   pull_request:
   workflow_dispatch:
 permissions:
@@ -54,6 +58,7 @@ jobs:
         run: |
           export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"
           cargo build --locked --manifest-path bridge/Cargo.toml --release --target x86_64-pc-windows-gnu
+          python tools/collect_rust_notices.py --manifest bridge/Cargo.toml --output bridge/RUNTIME-DEPENDENCIES.txt
       - name: Build ScummVM host with Rust runtime linked statically
         run: |
           git init upstream
@@ -72,6 +77,7 @@ jobs:
           cp ../bridge/target/x86_64-pc-windows-gnu/release/smoke.exe ../runtime/xfiles-shiloh-smoke.exe
           cp ../README.md ../LICENSE ../THIRD_PARTY.md ../runtime/
           cp ../bridge/SHILOH-NOTICES.txt ../runtime/
+          cp ../bridge/RUNTIME-DEPENDENCIES.txt ../runtime/
           cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles.cmd ../runtime/
           mkdir -p ../runtime/tools
           cp ../tools/prepare_data.mjs ../runtime/tools/

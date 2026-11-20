@@ -1,15 +1,16 @@
-# The X-Files Game (1998) - ScummVM research engine
+# The X-Files Game (1998) for ScummVM
 
-**Experimental first milestone. The full game is NOT playable.**
+**Experimental integration. A complete playthrough has not been validated.**
 
-An **optional in-process Shiloh runtime** is now under integration and validation.
+The **in-process Shiloh runtime** is under integration and validation.
 It links the pinned Rust engine core into ScummVM and routes input, RGB frames
 and mixed PCM through ScummVM. It does not start Shiloh's SDL program or the
 original executable. This backend has its own CI workflow and remains experimental;
 successful compilation alone is not a verified complete playthrough.
 
-The existing C++ research frontend remains available and incomplete as described
-below. A runtime build can select it with `xfiles_research=true` in the game target.
+The separate C++ research frontend remains available. It reads databases and plays
+media but does not execute a game. A runtime build can select it with
+`xfiles_research=true` in the game target.
 The Rust dependency is pinned to `e3dfde0d098b25135a5243839d44842ccbc5fe91`.
 Rust is pinned to 1.100.0 and the resolved crates are recorded in `bridge/Cargo.lock`.
 Save slots and preferences are kept outside game data, in the selected ScummVM
@@ -24,11 +25,17 @@ Paths can be supplied to `Prepara-e-Avvia.ps1` with `-GameDirectory`,
 `-IsoDirectory`, `-PreparedDirectory` and `-SaveDirectory`. `-PrepareOnly` prepares
 the data without starting ScummVM. No execution-policy setting is changed.
 
-This repository contains a native ScummVM detector, a NeoAccess database reader
-and a resource browser with QuickTime playback through ScummVM's own decoder.
-It does not run the original executable or yet interpret the game's scripts.
+Two build artifacts are intentionally distinct:
 
-Implemented:
+| Artifact | Behavior | Validation scope |
+| --- | --- | --- |
+| ScummVM-XFiles-Shiloh-experimental-Windows | Hosts Shiloh's scene, script, dialogue, inventory, PDA and save logic inside ScummVM; ScummVM supplies input, graphics and audio output | Bridge tests and build checks; gameplay and A/V validation still required |
+| ScummVM-XFiles-Windows-preview | Native C++ database inspector and movie browser | Parser tests, original database inspection and compile checks; does not execute gameplay |
+
+Neither artifact starts the original game executable. The original executable and
+DLLs may be read as data by Shiloh to obtain game-specific tables and resources.
+
+The native C++ research frontend implements:
 
 - Exact detection of the local database pair, using ScummVM's first-5000-byte MD5 convention.
 - Bounded big-endian NeoAccess 5.01 class-tree and object-index reader.
