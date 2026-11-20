@@ -48,3 +48,19 @@ Non restano suite di questa revisione in esecuzione. La build integrata e dispon
 Artefatto runtime: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44785250159/artifacts/14653308848
 SHA256 ZIP: 80d028ed56209562f10818dc6f6f2dc0ce60aaa62e3bc9e3e3c0dc78808b60b9
 
+## Correzione avviatore del 20 novembre 2026
+
+Revisione 1df4675eb5d4d51289b7c7a1fb7a558e2dd21273: risolto Split-Path su stringa vuota nei parametri predefiniti. Percorsi inizializzati dopo param, con ripiego per la directory dello script e LocalAppData; messaggio dedicato per DLL mancanti.
+
+- Suite 44790119649 SUCCESS: regressione Windows PowerShell 5.1 con cartelle con spazi, parametri impliciti/espliciti e eseguibile assente; test database e compilazioni Linux/Windows.
+- Suite 44790119765 SUCCESS: ABI Rust, runtime Windows, dipendenze autonome e registrazione xfiles.
+- La prima versione del nuovo test conservava il codice di uscita della prova di errore intenzionale: corretto, poi rieseguito con successo.
+- Test C++ e Node locali PASS; esecuzione locale dei file PowerShell bloccata dalla policy, lasciata invariata.
+- L'eseguibile preesistente in D:\scummvm-xfiles termina con 0xC0000135; importa WinSparkle.dll assente dalla sua cartella. Non costituisce una verifica del pacchetto runtime integrato. Il download del runtime per la prova locale non e stato completato.
+
+Pacchetto aggiornato: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44790119765/artifacts/14654934372
+
+SHA256 ZIP: 09c48354069e4a231804b0a02e140115fcc932deb0487eea05021831eac7ea53
+
+Tutte le suite avviate sono terminate. Rimangono da verificare avvio locale con dati reali, audio/video, salvataggi e partita completa.
+

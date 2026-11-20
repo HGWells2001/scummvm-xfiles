@@ -18,12 +18,20 @@ save directory's `xfiles-shiloh` subdirectory. This prototype uses the core's
 filesystem save format; integration with ScummVM's save browser is pending.
 
 For a Windows artifact, extract the entire ZIP and start `Avvia-XFiles.cmd`.
+The [runtime package with the corrected launcher](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44790119765/artifacts/14654934372)
+passed the Windows checks at revision `1df4675eb5d4d51289b7c7a1fb7a558e2dd21273`.
 The Italian launcher uses existing prepared data when available; otherwise it
 recovers the data forks from the seven local ISOs. Node.js 24 is needed for
 preparation only. It keeps its ScummVM settings separate from other installations.
 Paths can be supplied to `Prepara-e-Avvia.ps1` with `-GameDirectory`,
 `-IsoDirectory`, `-PreparedDirectory` and `-SaveDirectory`. `-PrepareOnly` prepares
 the data without starting ScummVM. No execution-policy setting is changed.
+Default paths are resolved after parameter binding, including when the package
+directory contains spaces. The Windows CI invokes the launcher under Windows
+PowerShell 5.1 with both default and explicit prepared-data directories.
+If Windows reports a missing runtime DLL, the launcher asks you to extract the
+entire Windows artifact. An unrelated ScummVM executable is not a substitute for
+the experimental runtime package.
 `-SmokeTest` opens the prepared databases and renders the initial screen through
 SDL's dummy drivers, then exits. It is a startup check, not a playthrough or an
 audio/visual quality check.
