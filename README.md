@@ -18,8 +18,8 @@ save directory's `xfiles-shiloh` subdirectory. This prototype uses the core's
 filesystem save format; integration with ScummVM's save browser is pending.
 
 For a Windows artifact, extract the entire ZIP and start `Avvia-XFiles.cmd`.
-The [runtime package with software video fallback and GUI resources](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44794217680/artifacts/14657703400)
-passed the Windows checks at revision `5b8591ad225868e77caff41889a16dd3f9543154`.
+The [runtime package with software video fallback and GUI resources](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44796666340/artifacts/14659311690)
+passed the Windows checks at revision `1fe502c4eb65895e600687106f8291bf653eabd0`.
 The Italian launcher uses existing prepared data when available; otherwise it
 recovers the data forks from the seven local ISOs. Node.js 24 is needed for
 preparation only. It keeps its ScummVM settings separate from other installations.
@@ -166,3 +166,5 @@ The local edition has 15 QDMC files. On its first game scene, 120 core ticks
 changed from 0 to 175096 nonzero audio samples after preparation; the exported
 RGB frame stayed byte-identical. This verifies decoded output, not a complete
 playthrough or the subjective quality of every sound.
+
+For an existing Shiloh runtime, download the [small audio patch](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44796666340/artifacts/14658339270) and extract it into that runtime folder, preserving tools/. Then start Avvia-XFiles-Video-Compatibile.cmd. The first launch prepares the QDMC audio with the installed FFmpeg; later launches reuse the verified cache.

@@ -80,3 +80,21 @@ Revisione 5b8591ad225868e77caff41889a16dd3f9543154: suite 44794217680 e 44794217
 Pacchetto: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44794217680/artifacts/14657703400
 
 SHA256 ZIP: a01c346569b1603d8ceaaf0e025f202d8e022ec42ae911250bb9958f557e8a0b
+
+## Audio assente nella prima scena: QDMC
+
+Segnalazione: video e audio regolari con l'avviatore software, ma niente audio davanti all'ufficio FBI. Il filmato XV/64421.XMV usa QDesign Music (QDMC), che il core fissato legge da cache PCM. FFprobe locale conferma QDMC, 44100 Hz e due canali.
+
+Aggiunto tools/prepare_audio.mjs: cerca le tracce QDMC, usa FFmpeg/ffprobe gia installati (-ignore_editlist 1), conserva WAV PCM e metadati compatibili con Shiloh fuori dai dati del gioco. Gli avviatori impostano XF_CACHE e preparano/verificano la cache prima di avviare il runtime. Gli errori sono visibili in preparazione-audio.log. Nessun file originale o decoder viene scaricato, modificato o pubblicato.
+
+Verifica sui dati reali: 15 file QDMC preparati; seconda esecuzione 0 preparati e 15 riutilizzati. Alterando un WAV di prova, viene rigenerato solo quello (1 preparato, 14 riutilizzati). FNV64 verificato contro un'implementazione BigInt indipendente. Test di intestazioni QuickTime, troncamenti e isolamento della cache PASS.
+
+Primi 120 tick della scena: prima 0 campioni non nulli; dopo 175096. Ripetendo con la sola cache XV/64421.XMV si ottiene lo stesso risultato. Il frame RGB mantiene lo stesso SHA256 prima/dopo (5e7f64c5fff523df626b3fa7dd549c0c77aaa7153a2b3746cec0960f865ca7ff). Questa prova verifica l'uscita PCM, non una partita completa o ogni dettaglio della qualita sonora.
+
+Revisione 1fe502c4eb65895e600687106f8291bf653eabd0: suite 44796666310 e 44796666340 SUCCESS; tutte terminate. Test Node/C++/Python, avviatore Windows, ABI Rust, compilazioni Linux/Windows e controllo delle DLL PASS.
+
+Patch audio (6295 byte): https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44796666340/artifacts/14658339270
+SHA256: 92002093766e93fe06e4266bb96ecaf82032bf11bf71a6688080f2e9ddfcd5e2
+
+Runtime completo: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44796666340/artifacts/14659311690
+SHA256: 141ca40267dfed5ba29f7ac2a72613fbf2f31bbead5c3c0015639f3ecef40399
