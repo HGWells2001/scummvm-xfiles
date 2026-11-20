@@ -8,6 +8,7 @@ on:
       - 'tools/install_engine.py'
       - 'tools/collect_rust_notices.py'
       - 'tools/verify_windows_package.py'
+      - 'tools/prepare_audio.mjs'
       - 'Prepara-e-Avvia.ps1'
       - 'Avvia-XFiles*.cmd'
   pull_request:
@@ -93,6 +94,11 @@ jobs:
           cp -r LICENSES ../runtime/
           mkdir -p ../runtime/tools
           cp ../tools/prepare_data.mjs ../runtime/tools/
+          cp ../tools/prepare_audio.mjs ../runtime/tools/
+          mkdir -p ../audio-patch/tools
+          cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles-Video-Compatibile.cmd ../audio-patch/
+          cp ../tools/prepare_audio.mjs ../audio-patch/tools/
+          printf 'Extract into the existing Shiloh runtime folder, preserving tools/. Start Avvia-XFiles-Video-Compatibile.cmd. Requires Node.js 24 and FFmpeg/ffprobe on PATH. Original game files are not modified.\n' > ../audio-patch/README-AUDIO.txt
       - name: Verify packaged DLL closure and engine registration
         shell: pwsh
         run: python tools/verify_windows_package.py runtime
@@ -100,6 +106,10 @@ jobs:
         with:
           name: ScummVM-XFiles-Shiloh-experimental-Windows
           path: runtime/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScummVM-XFiles-Audio-Patch
+          path: audio-patch/
       - uses: actions/upload-artifact@v4
         if: always()
         with:

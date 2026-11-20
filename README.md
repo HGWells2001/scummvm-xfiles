@@ -144,3 +144,25 @@ Common containers is required before proposing upstream inclusion.
 
 See [STATUS.md](STATUS.md) and [THIRD_PARTY.md](THIRD_PARTY.md).
 No original game data, executable or decompiled game code is distributed.
+
+## QDMC audio preparation
+
+The New Game opening movie (XV/64421.XMV), music and several later movies use
+QDesign Music (QDMC). The pinned Shiloh core consumes a verified PCM cache for
+this codec. Runtime launchers now run tools/prepare_audio.mjs before starting.
+Node.js 24 and an existing FFmpeg/ffprobe on PATH are required for this one-time
+decode. XF_FFMPEG and XF_FFPROBE may name explicit executables. No decoder or
+game file is downloaded by the helper.
+
+The helper scans QuickTime headers, decodes only QDMC sound tracks with
+-ignore_editlist 1, and writes PCM WAV plus source size/FNV64 metadata in
+%LOCALAPPDATA%/ScummVM-XFiles/saves/audio-cache (or the launcher's selected saves
+directory). The core applies the original movie edit list once. Original game
+files are never replaced. Cache entries additionally carry a WAV SHA256 and
+are reused only when both source identity and cached bytes match. Errors are
+reported in preparazione-audio.log rather than being silently ignored.
+
+The local edition has 15 QDMC files. On its first game scene, 120 core ticks
+changed from 0 to 175096 nonzero audio samples after preparation; the exported
+RGB frame stayed byte-identical. This verifies decoded output, not a complete
+playthrough or the subjective quality of every sound.

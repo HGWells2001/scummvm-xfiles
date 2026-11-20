@@ -33,6 +33,7 @@ jobs:
         with:
           node-version: 24
       - run: node tests/prepare_data.mjs
+      - run: node tests/prepare_audio.mjs
   scummvm-compile:
     runs-on: ubuntu-latest
     steps:

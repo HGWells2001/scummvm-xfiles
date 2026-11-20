@@ -29,6 +29,8 @@ def main():
         if not (executable.parent / name).is_file():
             raise RuntimeError(f"Incomplete Windows package: missing {name}")
     env = standalone_environment(os.environ)
+    if not (executable.parent / "tools" / "prepare_audio.mjs").is_file():
+        raise RuntimeError("Incomplete Windows package: missing QDMC audio preparation")
     for option in ["--version", "--list-engines"]:
         result = subprocess.run(
             [str(executable), option], cwd=executable.parent, env=env,

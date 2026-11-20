@@ -89,6 +89,17 @@ try {
     }
     if ($PrepareOnly) { Write-Host "Dati pronti in: $data"; exit 0 }
     New-Item -ItemType Directory -Path $SaveDirectory -Force | Out-Null
+    $audioPrep = Join-Path $scriptDirectory 'tools\prepare_audio.mjs'
+    if (Test-Path -LiteralPath $audioPrep -PathType Leaf) {
+        $env:XF_CACHE = Join-Path $SaveDirectory 'audio-cache'
+        $node = Get-Command node.exe -ErrorAction SilentlyContinue
+        if ($node) {
+            Write-Host 'Controllo audio QDMC. La prima preparazione usa FFmpeg e puo richiedere qualche secondo.'
+            $audioLog = Join-Path $scriptDirectory 'preparazione-audio.log'
+            & $node.Source $audioPrep $data $env:XF_CACHE *> $audioLog
+            if ($LASTEXITCODE -ne 0) { Write-Warning "Audio QDMC non preparato. Serve FFmpeg con ffprobe nel PATH. Dettagli in $audioLog" }
+        } else { Write-Warning 'Per ripristinare audio QDMC servono Node.js 24 e FFmpeg con ffprobe.' }
+    }
     $config = Join-Path $scriptDirectory 'scummvm-xfiles.ini'
     Write-Host "Avvio ScummVM con i dati in: $data"
     $arguments = @("--config=$config", "--path=$data", "--savepath=$SaveDirectory", "--extrapath=$scriptDirectory", "--themepath=$scriptDirectory", "--logfile=$(Join-Path $scriptDirectory 'xfiles-runtime.log')")
