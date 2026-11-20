@@ -15,7 +15,17 @@ fn candidates(root:&Path)->Result<Vec<(PathBuf,PathBuf)>,String>{
     for name in ["MININST","MEDINST","XG","XN","XS","XV","XT"]{
         if let Some(p)=child(root,name){
             let kind=std::fs::symlink_metadata(&p).map_err(|e|e.to_string())?;
-            if kind.is_dir() && !kind.file_type().is_symlink(){dirs.push(p);}
+            if kind.is_dir() && !kind.file_type().is_symlink(){
+                if name=="MININST" || name=="MEDINST"{
+                    for media in ["XG","XN","XS","XV","XT"]{
+                        if let Some(sub)=child(&p,media){
+                            let kind=std::fs::symlink_metadata(&sub).map_err(|e|e.to_string())?;
+                            if kind.is_dir() && !kind.file_type().is_symlink(){dirs.push(sub);}
+                        }
+                    }
+                }
+                dirs.push(p);
+            }
         }
     }
     for dir in dirs{
@@ -28,9 +38,11 @@ fn candidates(root:&Path)->Result<Vec<(PathBuf,PathBuf)>,String>{
             if e.metadata().map_err(|e|e.to_string())?.len()!=286{continue;}
             if !empty_fork(&std::fs::read(&path).map_err(|e|e.to_string())?){continue;}
             let relative=path.strip_prefix(root).map_err(|e|e.to_string())?.to_path_buf();
-            let key=if dir.file_name().is_some_and(|n|{
-                let n=n.to_string_lossy();n.eq_ignore_ascii_case("MININST")||n.eq_ignore_ascii_case("MEDINST")
-            }){PathBuf::from(e.file_name())}else{relative.clone()};
+            let mut parts=relative.components();
+            let install=parts.next().is_some_and(|n|{
+                let n=n.as_os_str().to_string_lossy();n.eq_ignore_ascii_case("MININST")||n.eq_ignore_ascii_case("MEDINST")
+            });
+            let key=if install{parts.as_path().to_path_buf()}else{relative.clone()};
             out.push((relative,key));
         }
     }
@@ -113,6 +125,22 @@ pub fn repair(root:&Path,progress:&mut dyn FnMut(usize,usize)->bool)->Result<usi
 
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn nested_install_media_keeps_logical_cd_paths_and_valid_286_byte_files(){
+        let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root=std::env::temp_dir().join(format!("xfiles-nested-restore-{stamp}"));
+        std::fs::create_dir_all(root.join("MININST/XT")).unwrap();
+        std::fs::create_dir_all(root.join("MEDINST/XV")).unwrap();
+        let mut fork=vec![0;286];fork[..16].copy_from_slice(&HEADER);
+        std::fs::write(root.join("MININST/XT/line.XTX"),&fork).unwrap();
+        std::fs::write(root.join("MEDINST/XV/clip.XMV"),&fork).unwrap();
+        let mut valid=vec![0;286];valid[..4].copy_from_slice(b"HSPT");
+        std::fs::write(root.join("MEDINST/XV/valid.HOT"),&valid).unwrap();
+        let files=candidates(&root).unwrap();assert_eq!(files.len(),2);
+        assert!(files.contains(&(PathBuf::from("MININST/XT/line.XTX"),PathBuf::from("XT/line.XTX"))));
+        assert!(files.contains(&(PathBuf::from("MEDINST/XV/clip.XMV"),PathBuf::from("XV/clip.XMV"))));
+        assert_eq!(std::fs::read(root.join("MEDINST/XV/valid.HOT")).unwrap(),valid);
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]fn restoration_preserves_originals_and_installer_metadata(){
         let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let root=std::env::temp_dir().join(format!("xfiles-restore-{stamp}"));std::fs::create_dir_all(root.join("MININST")).unwrap();

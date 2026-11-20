@@ -128,10 +128,10 @@ pub unsafe extern "C" fn xfs_create_progress(data: *const c_char, saves: *const 
     progress:Option<unsafe extern "C" fn(*mut std::ffi::c_void,u32,u32)->i32>, context:*mut std::ffi::c_void) -> *mut Bridge {
     let result = catch_unwind(AssertUnwindSafe(|| -> Result<Box<Bridge>, String> {
         let original = prepare::selected_root(&path(data)?)?;
-        restore::repair(&original,&mut |done,total|progress.map_or(true,|p|p(context,done as u32,total as u32)!=0))?;
-        let data = prepare::data_root(&original)?;
         let requested = path(saves)?;
         let saves = prepare::state_directory(&requested,&original)?;
+        restore::repair(&original,&mut |done,total|progress.map_or(true,|p|p(context,done as u32,total as u32)!=0))?;
+        let data = prepare::data_root(&original)?;
         let title = Box::new(read_database(&database(&data,"XFILES.HDB")?)?);
         let base = Box::new(read_database(&database(&data,"XFILES.GAM")?)?);
         let media=xf::media::MediaLib::new(&data);
