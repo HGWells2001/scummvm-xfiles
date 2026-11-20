@@ -41,6 +41,7 @@ uint32 virtualKey(const Common::KeyState &key){
 	const int c=key.keycode;
 	if(c>=Common::KEYCODE_a && c<=Common::KEYCODE_z)return 'A'+c-Common::KEYCODE_a;
 	if(c>=Common::KEYCODE_0 && c<=Common::KEYCODE_9)return '0'+c-Common::KEYCODE_0;
+	if(c>=Common::KEYCODE_KP0 && c<=Common::KEYCODE_KP9)return '0'+c-Common::KEYCODE_KP0;
 	switch(c){
 	case Common::KEYCODE_RETURN: case Common::KEYCODE_KP_ENTER:return 13;
 	case Common::KEYCODE_ESCAPE:return 27;
@@ -67,6 +68,11 @@ void defaultCursor(){
 	CursorMan.replaceCursorPalette(palette,0,2);CursorMan.showMouse(true);
 }
 }
+void ShilohEngine::pauseEngineIntern(bool pause){
+	Engine::pauseEngineIntern(pause);
+	// A modal ScummVM pause must not advance the game's timers on resume.
+	_lastTick=_system->getMillis();
+}
 Common::Error ShilohEngine::run(){
 	const Common::String data=ConfMan.getPath("path").toString('/');
 	const Common::String saves=ConfMan.getPath("savepath").join("xfiles-shiloh").toString('/');
@@ -82,7 +88,7 @@ Common::Error ShilohEngine::run(){
 	const Graphics::PixelFormat source(3,8,8,8,0,0,8,16,0);
 	Audio::QueuingAudioStream *audio=Audio::makeQueuingAudioStream(44100,true);
 	_mixer->playStream(Audio::Mixer::kPlainSoundType,&runtime.sound,audio);runtime.playing=true;
-	uint32 last=_system->getMillis();uint64 audioFraction=0;
+	_lastTick=_system->getMillis();uint64 audioFraction=0;
 	int result=0;
 	while(!shouldQuit()){
 		Common::Event event;
@@ -108,8 +114,8 @@ Common::Error ShilohEngine::run(){
 		}
 		if(result)break;
 		const uint32 now=_system->getMillis();
-		if(now-last<16){_system->delayMillis(1);continue;}
-		const uint32 dt=MIN<uint32>(now-last,250);last=now;
+		if(now-_lastTick<16){_system->delayMillis(1);continue;}
+		const uint32 dt=MIN<uint32>(now-_lastTick,250);_lastTick=now;
 		result=xfs_tick(core,dt);if(result)break;
 		result=xfs_frame(core,rgb.data(),rgb.size());if(result)break;
 		Graphics::Surface raw;raw.init(640,480,640*3,rgb.data(),source);

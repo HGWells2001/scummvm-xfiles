@@ -7,7 +7,8 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 
 export function safeName(name){
-  return !!name && name!=='.' && name!=='..' && !/[\\/:\x00-\x1f]/.test(name) && !/[ .]$/.test(name);
+  return !!name && name!=='.' && name!=='..' && !/[\\/:<>"|?*\x00-\x1f\x7f-\xff]/.test(name) && !/[ .]$/.test(name)
+    && !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(name);
 }
 export function records(buffer){
   const result=[];
@@ -19,7 +20,7 @@ export function records(buffer){
     if(length>n-33)throw Error('Invalid ISO filename length');
     p+=n;
     if(length===1 && r[33]<=1)continue;
-    const name=r.toString('ascii',33,33+length).replace(/;\d+$/,'').replace(/\.$/,'').toUpperCase();
+    const name=r.toString('latin1',33,33+length).replace(/;\d+$/,'').replace(/\.$/,'').toUpperCase();
     if(!safeName(name))throw Error('Unsafe ISO filename');
     if(r.readUInt32LE(2)!==r.readUInt32BE(6) || r.readUInt32LE(10)!==r.readUInt32BE(14))throw Error('ISO extent byte-order mismatch');
     result.push({name,extent:r.readUInt32LE(2),size:r.readUInt32LE(10),flags:r[25],directory:!!(r[25]&2)});
@@ -58,7 +59,7 @@ export function quicktimeIdentity(input){
     if(depth>16)return false;
     for(let p=start;p<end;){
       if(end-p<8)return false;
-      let n=b.readUInt32BE(p);const type=b.toString('ascii',p+4,p+8);
+      let n=b.readUInt32BE(p);const type=b.toString('latin1',p+4,p+8);
       if(n===0)n=end-p;
       if(n<8 || n>end-p)return false;
       if(type==='moov')++movies;if(type==='mdat')++media;
@@ -91,7 +92,7 @@ export async function prepareData(images,destination,progress=()=>{}){
     try{
       const total=(await iso.stat()).size;
       const pvd=await readExact(iso,16*2048,2048,total);
-      if(pvd[0]!==1 || pvd.toString('ascii',1,6)!=='CD001' || pvd.readUInt16LE(128)!==2048)throw Error('Expected ISO9660 image with 2048-byte sectors');
+      if(pvd[0]!==1 || pvd[6]!==1 || pvd.toString('latin1',1,6)!=='CD001' || pvd.readUInt16LE(128)!==2048 || pvd.readUInt16BE(130)!==2048)throw Error('Expected ISO9660 image with 2048-byte sectors');
       const root={extent:pvd.readUInt32LE(158),size:pvd.readUInt32LE(166)};
       const seen=new Set();
       async function walk(dir,path,depth){
@@ -109,8 +110,8 @@ export async function prepareData(images,destination,progress=()=>{}){
           const relative=parts.join('/'), target=join(output,...parts), parent=parts.slice(0,-1).join('/');
           await ensureDirectory(output,parent);
           const hash=await digest(iso,record.extent*2048,record.size,total);let writtenHash=hash;
-          let exists=false;
-          try{const s=await lstat(target);if(s.isSymbolicLink() || !s.isFile())throw Error('Unsafe existing output');exists=true;
+          let exists=false,actualSize=record.size;
+          try{const s=await lstat(target);if(s.isSymbolicLink() || !s.isFile())throw Error('Unsafe existing output');exists=true;actualSize=s.size;
             const old=await open(target,'r');try{
               writtenHash=await digest(old,0,s.size,s.size);
               if(writtenHash!==hash){
@@ -127,7 +128,7 @@ export async function prepareData(images,destination,progress=()=>{}){
             try{for(let p=0;p<record.size;p+=1048576){const b=await readExact(iso,record.extent*2048+p,Math.min(1048576,record.size-p),total);let n=0;while(n<b.length){const w=await dest.write(b,n,b.length-n);if(!w.bytesWritten)throw Error('Short output write');n+=w.bytesWritten;}}}finally{await dest.close();}
             await rename(temp,target);++copied;bytes+=record.size;
           }
-          manifest.push({source:basename(image),path:relative,size:record.size,sha256:writtenHash,source_sha256:hash});
+          manifest.push({source:basename(image),path:relative,size:actualSize,source_size:record.size,sha256:writtenHash,source_sha256:hash});
         }
         seen.delete(dir.extent);
       }

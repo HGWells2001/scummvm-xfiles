@@ -42,3 +42,7 @@ Corrette opzioni configure Windows: il pin usa --opengl-mode=none; --disable-ope
 ## Avviatore e verifiche integrazione
 Avviatore italiano aggiunto e verificato con -PrepareOnly sui dati locali corretti. Nessuna modifica alle policy PowerShell. Parser PowerShell e test ISO PASS. Il wrapper C++ del runtime compila localmente con USE_XFILES_SHILOH. La suite Rust iniziale e PASS su Linux; build Windows integrata ancora in corso. Aggiunti controlli sui database e salvataggi esterni ai dati; un nuovo test verifica il rifiuto di database corrotti prima di creare la sessione. Profilo di sviluppo Rust senza LTO per ridurre i tempi di compilazione.
 
+
+## Riproducibilita e collegamento Windows
+Registrato Cargo.lock dalla suite Rust riuscita, compilatore fissato a Rust 1.100.0. Individuato errore di link delle funzioni WaitOnAddress/WakeByAddress: corretto aggiungendo la libreria Windows synchronization, verificata nella toolchain locale. Aggiunti tastierino numerico e sincronizzazione della pausa ScummVM con il clock del core. Ultimi test ISO e compilazione locale host PASS; build integrata da ricontrollare sulla nuova revisione.
+

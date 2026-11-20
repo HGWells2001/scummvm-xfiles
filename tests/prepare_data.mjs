@@ -10,7 +10,7 @@ function entry(name,extent,size,flags=0){
   b[0]=n;b.writeUInt32LE(extent,2);b.writeUInt32BE(extent,6);b.writeUInt32LE(size,10);b.writeUInt32BE(size,14);b[25]=flags;b[32]=name.length;b.write(name,33,'ascii');return b;
 }
 export async function run(){
-  for(const name of ['../x','a/b','x\\y','C:x','..','x.','x '])assert.equal(safeName(name),false);
+  for(const name of ['../x','a/b','x\\y','C:x','..','x.','x ','CON.PFF','NUL','LPT1.XMV','file*','A\x80'])assert.equal(safeName(name),false);
   assert.equal(safeName('X.PFF'),true);
   const r=entry('X.PFF',22,32);assert.equal(records(r)[0].size,32);
   const bad=Buffer.from(r);bad[14]^=1;assert.throws(()=>records(bad),/byte-order/);
@@ -35,6 +35,8 @@ export async function run(){
   const changed=Buffer.from(movie);changed[20]=17;changed[132]=99;
   assert.equal(quicktimeIdentity(movie),quicktimeIdentity(changed));
   changed[changed.length-1]^=1;assert.notEqual(quicktimeIdentity(movie),quicktimeIdentity(changed));
+  const wrongAtom=Buffer.from(movie);wrongAtom[120]|=0x80;
+  assert.notEqual(quicktimeIdentity(movie),quicktimeIdentity(wrongAtom));
   assert.equal(quicktimeIdentity(Buffer.from('not a movie')),null);
   console.log('PASS: ISO associated forks, bounds, extraction, resume, conflicts and QuickTime identity');
 }

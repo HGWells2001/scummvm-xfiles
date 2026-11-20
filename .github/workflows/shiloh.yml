@@ -15,8 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
       - name: Check ABI library and run bridge tests
-        run: cargo test --manifest-path bridge/Cargo.toml --lib
+        run: cargo test --locked --manifest-path bridge/Cargo.toml --lib
       - name: Record resolved dependency lock for review
         run: cat bridge/Cargo.lock
   windows-runtime:
@@ -28,6 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.100.0
           targets: x86_64-pc-windows-gnu
       - uses: actions/cache@v4
         with:
@@ -35,8 +38,8 @@ jobs:
             bridge/target
             ~/.cargo/registry
             ~/.cargo/git
-          key: rust-bridge-${{ runner.os }}-gnu-${{ hashFiles('bridge/Cargo.toml') }}
-          restore-keys: rust-bridge-${{ runner.os }}-gnu-
+          key: rust-bridge-1.100.0-${{ runner.os }}-gnu-${{ hashFiles('bridge/Cargo.toml', 'bridge/Cargo.lock') }}
+          restore-keys: rust-bridge-1.100.0-${{ runner.os }}-gnu-
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -50,7 +53,7 @@ jobs:
       - name: Build pinned in-process runtime without SDL frontend
         run: |
           export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"
-          cargo build --manifest-path bridge/Cargo.toml --release --target x86_64-pc-windows-gnu
+          cargo build --locked --manifest-path bridge/Cargo.toml --release --target x86_64-pc-windows-gnu
       - name: Build ScummVM host with Rust runtime linked statically
         run: |
           git init upstream
@@ -61,7 +64,7 @@ jobs:
           cd upstream
           ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl --opengl-mode=none
           printf '\n#define USE_XFILES_SHILOH\n' >> config.h
-          printf '\nLIBS += %s/../bridge/target/x86_64-pc-windows-gnu/release/libxfiles_shiloh.a -luserenv -lws2_32 -lbcrypt -lntdll\n' "$PWD" >> config.mk
+          printf '\nLIBS += %s/../bridge/target/x86_64-pc-windows-gnu/release/libxfiles_shiloh.a -luserenv -lws2_32 -lbcrypt -lntdll -lsynchronization\n' "$PWD" >> config.mk
           make -j4
           mkdir -p ../runtime
           cp scummvm.exe ../runtime/

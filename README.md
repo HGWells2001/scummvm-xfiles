@@ -11,6 +11,7 @@ successful compilation alone is not a verified complete playthrough.
 The existing C++ research frontend remains available and incomplete as described
 below. A runtime build can select it with `xfiles_research=true` in the game target.
 The Rust dependency is pinned to `e3dfde0d098b25135a5243839d44842ccbc5fe91`.
+Rust is pinned to 1.100.0 and the resolved crates are recorded in `bridge/Cargo.lock`.
 Save slots and preferences are kept outside game data, in the selected ScummVM
 save directory's `xfiles-shiloh` subdirectory. This prototype uses the core's
 filesystem save format; integration with ScummVM's save browser is pending.

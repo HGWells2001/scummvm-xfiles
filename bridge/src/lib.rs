@@ -201,7 +201,7 @@ pub unsafe extern "C" fn xfs_view(b: *const Bridge) -> u32 {
 }
 #[no_mangle]
 pub unsafe extern "C" fn xfs_cursor_shown(b: *const Bridge) -> i32 {
-    b.as_ref().and_then(|b|b.session.as_ref()).map_or(0,|s|i32::from(host::game_cursor_shown(s)))
+    catch_unwind(AssertUnwindSafe(||b.as_ref().and_then(|b|b.session.as_ref()).map_or(0,|s|i32::from(host::game_cursor_shown(s))))).unwrap_or(0)
 }
 
 #[cfg(test)]
