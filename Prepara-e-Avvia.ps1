@@ -2,14 +2,15 @@
 param(
     [string]$GameDirectory = 'D:\The X-Files',
     [string]$IsoDirectory = 'D:\',
-    [string]$PreparedDirectory = (Join-Path (Split-Path $PSScriptRoot -Parent) 'XFiles-DatiPreparati'),
-    [string]$SaveDirectory = (Join-Path $env:LOCALAPPDATA 'ScummVM-XFiles\saves'),
+    [string]$PreparedDirectory,
+    [string]$SaveDirectory,
     [switch]$PrepareOnly,
     [switch]$SmokeTest
 )
 $ErrorActionPreference = 'Stop'
 
 function Test-InstalledData([string]$Directory) {
+    if ([string]::IsNullOrWhiteSpace($Directory)) { return $false }
     if (!(Test-Path -LiteralPath (Join-Path $Directory 'XFILES.HDB') -PathType Leaf)) { return $false }
     if (!(Test-Path -LiteralPath (Join-Path $Directory 'XFILES.GAM') -PathType Leaf)) { return $false }
     $picture = Join-Path $Directory 'X.PFF'
@@ -23,7 +24,40 @@ function Test-InstalledData([string]$Directory) {
 }
 
 try {
-    $executable = Join-Path $PSScriptRoot 'scummvm.exe'
+    # Inizializza i percorsi dopo param: durante i valori predefiniti
+    # $PSScriptRoot puo essere ancora una stringa vuota.
+    $scriptDirectory = $PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($scriptDirectory)) {
+        $scriptPath = $PSCommandPath
+        if ([string]::IsNullOrWhiteSpace($scriptPath)) {
+            $scriptPath = $MyInvocation.MyCommand.Path
+        }
+        if ([string]::IsNullOrWhiteSpace($scriptPath)) {
+            throw 'Impossibile determinare la cartella dello script. Avvialo con powershell.exe -File o con Avvia-XFiles.cmd.'
+        }
+        $scriptDirectory = Split-Path -Path $scriptPath -Parent
+    }
+    if ([string]::IsNullOrWhiteSpace($scriptDirectory)) {
+        throw 'La cartella dello script e vuota: non posso individuare i file del pacchetto.'
+    }
+    if ([string]::IsNullOrWhiteSpace($PreparedDirectory)) {
+        $parentDirectory = Split-Path -Path $scriptDirectory -Parent
+        if ([string]::IsNullOrWhiteSpace($parentDirectory)) {
+            $parentDirectory = $scriptDirectory
+        }
+        $PreparedDirectory = Join-Path -Path $parentDirectory -ChildPath 'XFiles-DatiPreparati'
+    }
+    if ([string]::IsNullOrWhiteSpace($SaveDirectory)) {
+        $localAppData = $env:LOCALAPPDATA
+        if ([string]::IsNullOrWhiteSpace($localAppData)) {
+            $localAppData = [Environment]::GetFolderPath('LocalApplicationData')
+        }
+        if ([string]::IsNullOrWhiteSpace($localAppData)) {
+            throw 'Impossibile individuare la cartella LocalAppData per i salvataggi.'
+        }
+        $SaveDirectory = Join-Path -Path $localAppData -ChildPath 'ScummVM-XFiles\saves'
+    }
+    $executable = Join-Path $scriptDirectory 'scummvm.exe'
     if (!$PrepareOnly -and !(Test-Path -LiteralPath $executable -PathType Leaf)) {
         throw 'Estrai prima la build Windows completa: scummvm.exe deve essere accanto a questo script.'
     }
@@ -34,7 +68,7 @@ try {
     } else {
         $node = Get-Command node.exe -ErrorAction SilentlyContinue
         if (!$node) { throw 'Per preparare i CD serve Node.js 24. Installa Node.js dal suo sito ufficiale, poi riprova.' }
-        $extractor = Join-Path $PSScriptRoot 'tools\prepare_data.mjs'
+        $extractor = Join-Path $scriptDirectory 'tools\prepare_data.mjs'
         if (!(Test-Path -LiteralPath $extractor -PathType Leaf)) { throw 'Pacchetto incompleto: manca tools\prepare_data.mjs.' }
         $images = @()
         foreach ($disc in 1..7) {
@@ -47,7 +81,7 @@ try {
             $images += $image
         }
         Write-Host 'Preparo una copia corretta dei sette CD. I file originali non vengono modificati.'
-        $log = Join-Path $PSScriptRoot 'preparazione-dati.log'
+        $log = Join-Path $scriptDirectory 'preparazione-dati.log'
         & $node.Source $extractor $PreparedDirectory @images *> $log
         if ($LASTEXITCODE -ne 0) { throw "Preparazione interrotta. Dettagli in $log" }
         if (!(Test-InstalledData $PreparedDirectory)) { throw 'La preparazione non ha prodotto i database e le immagini attesi.' }
@@ -55,7 +89,7 @@ try {
     }
     if ($PrepareOnly) { Write-Host "Dati pronti in: $data"; exit 0 }
     New-Item -ItemType Directory -Path $SaveDirectory -Force | Out-Null
-    $config = Join-Path $PSScriptRoot 'scummvm-xfiles.ini'
+    $config = Join-Path $scriptDirectory 'scummvm-xfiles.ini'
     Write-Host "Avvio ScummVM con i dati in: $data"
     $arguments = @("--config=$config", "--path=$data", "--savepath=$SaveDirectory")
     if ($SmokeTest) {
