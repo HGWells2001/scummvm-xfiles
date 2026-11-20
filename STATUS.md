@@ -33,3 +33,8 @@ Suite 44620882542: tutti e tre i job PASS, inclusa build Windows completa. Artef
 Decodificate tutte le 14247 azioni, nessuna strutturalmente sconosciuta. L'interprete non e ancora implementato.
 Trovati 2061 record ISO associati/resource fork. Recupero corretto completato in work/xfiles-data da tutti i sette ISO, senza modificare D:. Verificati 101 duplicati QuickTime equivalenti salvo date e padding. Test sintetici ISO, estrazione, conflitti e ripresa PASS.
 
+
+## Integrazione runtime Shiloh
+Aggiunto backend opzionale nello stesso processo ScummVM: core Rust fissato a e3dfde0d098b25135a5243839d44842ccbc5fe91, input mouse/tastiera, framebuffer RGB, coda audio PCM, richieste Nuova partita/Carica/Esci e salvataggi separati dai dati originali. Backend ancora in verifica, nessuna partita completa dichiarata verificata. Il lettore C++ resta selezionabile.
+Corrette opzioni configure Windows: il pin usa --opengl-mode=none; --disable-opengl e --enable-scalers non sono opzioni valide.
+

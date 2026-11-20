@@ -4,7 +4,10 @@ The NeoAccess structure reader was adapted from the documented layout in
 `port/src/hdb.rs` in [Asterber/shiloh](https://github.com/Asterber/shiloh), commit
 `e3dfde0d098b25135a5243839d44842ccbc5fe91`. The bounded C++ parser adds explicit
 size, pointer, tree-cycle and class-count validation. Shiloh's full runtime has
-not been ported or embedded. The asset descriptor format additionally references
+not been ported into the C++ research reader. The optional `bridge/` backend
+statically links the pinned Shiloh library with its SDL frontend disabled. Its
+additional required notices are in `bridge/SHILOH-NOTICES.txt` and are shipped
+with runtime builds. The asset descriptor format additionally references
 `port/src/media/asset.rs`; the four intro AssetRef IDs and their order reference
 `port/src/front/intro.rs`, at the same pinned revision. The frontend is new C++
 code using ScummVM's video/audio APIs. Shiloh's MIT notice is reproduced below.

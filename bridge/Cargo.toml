@@ -1,0 +1,18 @@
+[package]
+name = "xfiles-scummvm-bridge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "GPL-3.0-or-later"
+
+[lib]
+name = "xfiles_shiloh"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+xf = { git = "https://github.com/Asterber/shiloh.git", rev = "e3dfde0d098b25135a5243839d44842ccbc5fe91", default-features = false }
+
+[profile.release]
+panic = "unwind"
+lto = "thin"
+codegen-units = 1

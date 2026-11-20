@@ -1,0 +1,70 @@
+name: Verify optional Shiloh runtime
+on:
+  push:
+    paths:
+      - 'bridge/**'
+      - 'engines/xfiles/**'
+      - '.github/workflows/shiloh.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ffi-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check ABI library and run bridge tests
+        run: cargo test --manifest-path bridge/Cargo.toml --lib
+  windows-runtime:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            make
+            python
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-SDL2
+      - name: Build pinned in-process runtime without SDL frontend
+        run: |
+          export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"
+          cargo build --manifest-path bridge/Cargo.toml --release --target x86_64-pc-windows-gnu
+      - name: Build ScummVM host with Rust runtime linked statically
+        run: |
+          git init upstream
+          git -C upstream remote add origin https://github.com/scummvm/scummvm.git
+          git -C upstream fetch --depth=1 origin 55c2973c1df5e8790b4248ae36a6b1b37842ce12
+          git -C upstream checkout FETCH_HEAD
+          python tools/install_engine.py upstream
+          cd upstream
+          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl --opengl-mode=none
+          printf '\n#define USE_XFILES_SHILOH\n' >> config.h
+          printf '\nLIBS += %s/../bridge/target/x86_64-pc-windows-gnu/release/libxfiles_shiloh.a -luserenv -lws2_32 -lbcrypt -lntdll\n' "$PWD" >> config.mk
+          make -j4
+          mkdir -p ../runtime
+          cp scummvm.exe ../runtime/
+          ldd scummvm.exe | awk '/\/mingw64\/bin\// {print $3}' | while read -r dll; do cp "$dll" ../runtime/; done
+          cp ../bridge/target/x86_64-pc-windows-gnu/release/smoke.exe ../runtime/xfiles-shiloh-smoke.exe
+          cp ../README.md ../LICENSE ../THIRD_PARTY.md ../runtime/
+          cp ../bridge/SHILOH-NOTICES.txt ../runtime/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScummVM-XFiles-Shiloh-experimental-Windows
+          path: runtime/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Shiloh-bridge-Cargo-lock
+          path: bridge/Cargo.lock

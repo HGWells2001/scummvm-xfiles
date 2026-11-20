@@ -65,4 +65,3 @@ jobs:
         with:
           name: ScummVM-XFiles-Windows-preview
           path: preview/
-

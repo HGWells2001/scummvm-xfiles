@@ -2,6 +2,19 @@
 
 **Experimental first milestone. The full game is NOT playable.**
 
+An **optional in-process Shiloh runtime** is now under integration and validation.
+It links the pinned Rust engine core into ScummVM and routes input, RGB frames
+and mixed PCM through ScummVM. It does not start Shiloh's SDL program or the
+original executable. This backend has its own CI workflow and remains experimental;
+successful compilation alone is not a verified complete playthrough.
+
+The existing C++ research frontend remains available and incomplete as described
+below. A runtime build can select it with `xfiles_research=true` in the game target.
+The Rust dependency is pinned to `e3dfde0d098b25135a5243839d44842ccbc5fe91`.
+Save slots and preferences are kept outside game data, in the selected ScummVM
+save directory's `xfiles-shiloh` subdirectory. This prototype uses the core's
+filesystem save format; integration with ScummVM's save browser is pending.
+
 This repository contains a native ScummVM detector, a NeoAccess database reader
 and a resource browser with QuickTime playback through ScummVM's own decoder.
 It does not run the original executable or yet interpret the game's scripts.
