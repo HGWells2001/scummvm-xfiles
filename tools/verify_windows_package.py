@@ -29,6 +29,11 @@ def main():
         if not (executable.parent / name).is_file():
             raise RuntimeError(f"Incomplete Windows package: missing {name}")
     env = standalone_environment(os.environ)
+    decoder = executable.parent / "xfiles-audio-decoder.exe"
+    result = subprocess.run([str(decoder), "-decoders"], cwd=executable.parent, env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+    if result.returncode or "qdmc" not in result.stdout:
+        raise RuntimeError("The bundled standalone decoder does not support QDMC")
     if not (executable.parent / "tools" / "prepare_audio.mjs").is_file():
         raise RuntimeError("Incomplete Windows package: missing QDMC audio preparation")
     for option in ["--version", "--list-engines"]:

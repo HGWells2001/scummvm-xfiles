@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use xf::front::{self, Session, host, intro::Start};
 use xf::hdb::Hdb;
+mod prepare;
 
 const PIXELS: usize = 640 * 480 * 3;
 
@@ -89,12 +90,12 @@ unsafe fn copy_text(text: &str, out: *mut c_char, capacity: usize) {
     *out.add(n) = 0;
 }
 fn database(root: &Path, name: &str) -> Result<PathBuf, String> {
-    std::fs::read_dir(root).map_err(|e| e.to_string())?
-        .filter_map(Result::ok).find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(name))
-        .map(|e| e.path()).ok_or_else(|| format!("Missing {name}; use the prepared data directory"))
+    xf::io::read_dir(root).map_err(|e| e.to_string())?.into_iter()
+        .find(|e| !e.is_dir && e.name.eq_ignore_ascii_case(name))
+        .map(|e| e.path).ok_or_else(|| format!("Missing {name} in the selected game directory"))
 }
 fn read_database(file: &Path) -> Result<Hdb,String> {
-    let size=std::fs::metadata(file).map_err(|e|e.to_string())?.len();
+    let size=xf::io::size(file).map_err(|e|e.to_string())?;
     if !(24..=128*1024*1024).contains(&size) {return Err("Invalid database size".into());}
     let h=Hdb::open(file).map_err(|e|e.to_string())?;
     if h.version!=0x501 || !(1..=5).contains(&h.app_version) || h.nclasses==0 || h.nclasses>4096 || h.classes.len()!=h.nclasses as usize {
@@ -112,16 +113,13 @@ fn read_database(file: &Path) -> Result<Hdb,String> {
 #[no_mangle]
 pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, start: u32, error: *mut c_char, capacity: usize) -> *mut Bridge {
     let result = catch_unwind(AssertUnwindSafe(|| -> Result<Box<Bridge>, String> {
-        let data = path(data)?.canonicalize().map_err(|e| e.to_string())?;
+        let original = path(data)?.canonicalize().map_err(|e| e.to_string())?;
+        let data = prepare::data_root(&original)?;
         let requested = path(saves)?;
-        let parent = requested.parent().ok_or("Save directory has no parent")?.canonicalize().map_err(|e| e.to_string())?;
-        let saves = parent.join(requested.file_name().ok_or("Save directory has no name")?);
-        if saves.starts_with(&data) { return Err("Save directory must be outside original game data".into()); }
-        std::fs::create_dir_all(&saves).map_err(|e| e.to_string())?;
-        let saves = saves.canonicalize().map_err(|e| e.to_string())?;
-        if saves.starts_with(&data) { return Err("Save directory must be outside original game data".into()); }
+        let saves = prepare::state_directory(&requested,&original)?;
         let title = Box::new(read_database(&database(&data,"XFILES.HDB")?)?);
         let base = Box::new(read_database(&database(&data,"XFILES.GAM")?)?);
+        prepare::audio_cache(&data,&saves,&original)?;
         let title = Box::into_raw(title); let base = Box::into_raw(base);
         let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new() });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });

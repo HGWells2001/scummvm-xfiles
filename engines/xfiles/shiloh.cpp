@@ -15,6 +15,14 @@
 #include "audio/decoders/raw.h"
 #include "audio/mixer.h"
 
+#if defined(SDL_BACKEND) && defined(_WIN32)
+extern "C" {
+const char *SDL_GetHint(const char *);
+int SDL_SetHintWithPriority(const char *,const char *,int);
+int SDL_ResetHint(const char *);
+}
+#endif
+
 extern "C" {
 void *xfs_create(const char *,const char *,uint32,char *,size_t);
 void xfs_destroy(void *);
@@ -29,6 +37,15 @@ int xfs_cursor_shown(const void *);
 }
 namespace XFiles {
 namespace {
+// Set before the engine's graphics transaction recreates the SDL renderer.
+// Restore the previous hint when returning to the launcher.
+struct SoftwareVideoHint {
+#if defined(SDL_BACKEND) && defined(_WIN32)
+	Common::String previous;bool hadPrevious;
+	SoftwareVideoHint(){const char *p=SDL_GetHint("SDL_RENDER_DRIVER");hadPrevious=p!=nullptr;if(p)previous=p;SDL_SetHintWithPriority("SDL_RENDER_DRIVER","software",2);}
+	~SoftwareVideoHint(){if(hadPrevious)SDL_SetHintWithPriority("SDL_RENDER_DRIVER",previous.c_str(),2);else SDL_ResetHint("SDL_RENDER_DRIVER");}
+#endif
+};
 struct Runtime {
 	void *core;
 	Audio::Mixer *mixer;
@@ -75,13 +92,18 @@ void ShilohEngine::pauseEngineIntern(bool pause){
 }
 Common::Error ShilohEngine::run(){
 	const Common::String data=ConfMan.getPath("path").toString('/');
-	const Common::String saves=ConfMan.getPath("savepath").join("xfiles-shiloh").toString('/');
+	Common::Path saveBase=ConfMan.getPath("savepath");
+	if(saveBase.empty())saveBase=_system->getDefaultConfigFileName().getParent().join("saves");
+	const Common::String saves=saveBase.join("xfiles-shiloh").toString('/');
 	char message[1024]={0};
 	const int boot=ConfMan.hasKey("boot_param")?ConfMan.getInt("boot_param"):0;
+	SoftwareVideoHint videoHint;
+	initGraphics(640,480,nullptr);
+	_system->displayMessageOnOSD(Common::U32String("Preparazione del gioco..."));
+	_system->updateScreen();
 	void *core=xfs_create(data.c_str(),saves.c_str(),boot==-1?1:boot==-3?2:0,message,sizeof(message));
 	if(!core)return Common::Error(Common::kReadingFailed,message);
 	Runtime runtime(core,_mixer);
-	initGraphics(640,480,nullptr);
 	if(_system->getScreenFormat().bytesPerPixel<2)return Common::Error(Common::kUnsupportedColorMode);
 	defaultCursor();
 	std::vector<byte> rgb(640*480*3);

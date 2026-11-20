@@ -6,7 +6,7 @@ static const PlainGameDescriptor games[] = {
 	{"xfiles", "The X-Files Game (1998)"}, {nullptr, nullptr}
 };
 #ifdef USE_XFILES_SHILOH
-static const char *const variant="Experimental in-process Shiloh runtime";
+static const char *const variant="Experimental";
 #else
 static const char *const variant="Database research prototype (not playable)";
 #endif

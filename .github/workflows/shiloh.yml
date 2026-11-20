@@ -9,6 +9,7 @@ on:
       - 'tools/collect_rust_notices.py'
       - 'tools/verify_windows_package.py'
       - 'tools/prepare_audio.mjs'
+      - 'tools/build_audio_decoder.sh'
       - 'Prepara-e-Avvia.ps1'
       - 'Avvia-XFiles*.cmd'
   pull_request:
@@ -70,6 +71,8 @@ jobs:
       - name: Collect native Windows dependency notices
         shell: pwsh
         run: python tools/collect_rust_notices.py --manifest bridge/Cargo.toml --output bridge/RUNTIME-DEPENDENCIES.txt
+      - name: Build minimal bundled QDMC decoder
+        run: bash tools/build_audio_decoder.sh
       - name: Build ScummVM host with Rust runtime linked statically
         run: |
           git init upstream
@@ -89,8 +92,9 @@ jobs:
           cp ../README.md ../LICENSE ../THIRD_PARTY.md ../runtime/
           cp ../bridge/SHILOH-NOTICES.txt ../runtime/
           cp ../bridge/RUNTIME-DEPENDENCIES.txt ../runtime/
+          cp ../decoder-package/* ../runtime/
           cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles*.cmd ../runtime/
-          cp dists/engine-data/fonts.dat gui/themes/scummremastered.zip gui/themes/translations.dat ../runtime/
+          cp dists/engine-data/fonts.dat gui/themes/*.zip gui/themes/translations.dat gui/themes/gui-icons.dat ../runtime/
           cp -r LICENSES ../runtime/
           mkdir -p ../runtime/tools
           cp ../tools/prepare_data.mjs ../runtime/tools/
