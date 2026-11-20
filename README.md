@@ -24,6 +24,9 @@ preparation only. It keeps its ScummVM settings separate from other installation
 Paths can be supplied to `Prepara-e-Avvia.ps1` with `-GameDirectory`,
 `-IsoDirectory`, `-PreparedDirectory` and `-SaveDirectory`. `-PrepareOnly` prepares
 the data without starting ScummVM. No execution-policy setting is changed.
+`-SmokeTest` opens the prepared databases and renders the initial screen through
+SDL's dummy drivers, then exits. It is a startup check, not a playthrough or an
+audio/visual quality check.
 
 Two build artifacts are intentionally distinct:
 

@@ -4,7 +4,8 @@ param(
     [string]$IsoDirectory = 'D:\',
     [string]$PreparedDirectory = (Join-Path (Split-Path $PSScriptRoot -Parent) 'XFiles-DatiPreparati'),
     [string]$SaveDirectory = (Join-Path $env:LOCALAPPDATA 'ScummVM-XFiles\saves'),
-    [switch]$PrepareOnly
+    [switch]$PrepareOnly,
+    [switch]$SmokeTest
 )
 $ErrorActionPreference = 'Stop'
 
@@ -56,7 +57,13 @@ try {
     New-Item -ItemType Directory -Path $SaveDirectory -Force | Out-Null
     $config = Join-Path $PSScriptRoot 'scummvm-xfiles.ini'
     Write-Host "Avvio ScummVM con i dati in: $data"
-    & $executable "--config=$config" "--path=$data" "--savepath=$SaveDirectory" 'xfiles:xfiles'
+    $arguments = @("--config=$config", "--path=$data", "--savepath=$SaveDirectory")
+    if ($SmokeTest) {
+        $env:SDL_VIDEODRIVER = 'dummy'
+        $env:SDL_AUDIODRIVER = 'dummy'
+        $arguments += '--boot-param=-1'
+    }
+    & $executable @arguments 'xfiles:xfiles'
     exit $LASTEXITCODE
 } catch {
     Write-Error $_.Exception.Message -ErrorAction Continue

@@ -7,6 +7,7 @@ on:
       - '.github/workflows/shiloh.yml'
       - 'tools/install_engine.py'
       - 'tools/collect_rust_notices.py'
+      - 'tools/verify_windows_package.py'
       - 'Prepara-e-Avvia.ps1'
       - 'Avvia-XFiles.cmd'
   pull_request:
@@ -25,6 +26,8 @@ jobs:
         run: cargo test --locked --manifest-path bridge/Cargo.toml --lib
       - name: Record resolved dependency lock for review
         run: cat bridge/Cargo.lock
+      - name: Check dependency notice packaging
+        run: python3 tools/collect_rust_notices.py --manifest bridge/Cargo.toml --output bridge/RUNTIME-DEPENDENCIES.txt
   windows-runtime:
     runs-on: windows-latest
     defaults:
@@ -32,6 +35,9 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.100.0
@@ -58,7 +64,9 @@ jobs:
         run: |
           export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"
           cargo build --locked --manifest-path bridge/Cargo.toml --release --target x86_64-pc-windows-gnu
-          python tools/collect_rust_notices.py --manifest bridge/Cargo.toml --output bridge/RUNTIME-DEPENDENCIES.txt
+      - name: Collect native Windows dependency notices
+        shell: pwsh
+        run: python tools/collect_rust_notices.py --manifest bridge/Cargo.toml --output bridge/RUNTIME-DEPENDENCIES.txt
       - name: Build ScummVM host with Rust runtime linked statically
         run: |
           git init upstream
@@ -81,6 +89,9 @@ jobs:
           cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles.cmd ../runtime/
           mkdir -p ../runtime/tools
           cp ../tools/prepare_data.mjs ../runtime/tools/
+      - name: Verify packaged DLL closure and engine registration
+        shell: pwsh
+        run: python tools/verify_windows_package.py runtime
       - uses: actions/upload-artifact@v4
         with:
           name: ScummVM-XFiles-Shiloh-experimental-Windows
