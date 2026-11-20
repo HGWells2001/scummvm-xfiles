@@ -64,3 +64,19 @@ SHA256 ZIP: 09c48354069e4a231804b0a02e140115fcc932deb0487eea05021831eac7ea53
 
 Tutte le suite avviate sono terminate. Rimangono da verificare avvio locale con dati reali, audio/video, salvataggi e partita completa.
 
+
+## Diagnosi schermo nero con audio
+
+Il pacchetto 1df4675 e stato scaricato e il suo SHA256 verificato. Il core e stato eseguito sui dati reali sia di work/xfiles-data sia della cartella preparata accanto al pacchetto dell'utente: 120 tick, view=691, 434481 byte RGB non nulli. Il frame esportato mostra l'ufficio FBI di Seattle. Non e una prova di audio o partita completa.
+
+Una cattura della finestra mostra il logo introduttivo nel renderer predefinito. Con SDL_RENDER_DRIVER=software e SDL_VIDEODRIVER=windows sono visibili anche sfondo e voci del menu dopo aver saltato i quattro filmati. Il nero permanente segnalato non e stato riprodotto con queste impostazioni; non viene attribuito con certezza a un codec o driver.
+
+Trovati font e tema mancanti nel vecchio pacchetto; la vecchia build non includeva FreeType2. I pacchetti aggiornati includono fonts.dat, tema, traduzioni, licenze e FreeType2. Il controllo del pacchetto verifica anche questa funzionalita. La prima verifica aveva rilevato la mancata disponibilita di pkgconf: aggiunto e verificato con la nuova build. Gli avviatori indicano esplicitamente il percorso delle risorse e producono log.
+
+Avvia-XFiles-Video-Compatibile.cmd offre rendering software in finestra e una configurazione ScummVM separata, con log xfiles-video.log. Riutilizza i dati e i salvataggi esistenti. Il suo effetto sul problema segnalato richiede conferma nell'avvio dell'utente.
+
+Revisione 5b8591ad225868e77caff41889a16dd3f9543154: suite 44794217680 e 44794217492 SUCCESS. Verificati ABI Rust, test database e avviatore, compilazioni Linux/Windows, FreeType2, registrazione xfiles e caricamento autonomo delle DLL. Tutte le suite avviate sono terminate.
+
+Pacchetto: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44794217680/artifacts/14657703400
+
+SHA256 ZIP: a01c346569b1603d8ceaaf0e025f202d8e022ec42ae911250bb9958f557e8a0b

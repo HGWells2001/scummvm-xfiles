@@ -18,8 +18,8 @@ save directory's `xfiles-shiloh` subdirectory. This prototype uses the core's
 filesystem save format; integration with ScummVM's save browser is pending.
 
 For a Windows artifact, extract the entire ZIP and start `Avvia-XFiles.cmd`.
-The [runtime package with the corrected launcher](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44790119765/artifacts/14654934372)
-passed the Windows checks at revision `1df4675eb5d4d51289b7c7a1fb7a558e2dd21273`.
+The [runtime package with software video fallback and GUI resources](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44794217680/artifacts/14657703400)
+passed the Windows checks at revision `5b8591ad225868e77caff41889a16dd3f9543154`.
 The Italian launcher uses existing prepared data when available; otherwise it
 recovers the data forks from the seven local ISOs. Node.js 24 is needed for
 preparation only. It keeps its ScummVM settings separate from other installations.

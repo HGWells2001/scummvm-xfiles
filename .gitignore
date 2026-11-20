@@ -12,3 +12,7 @@ preparazione-dati.log
 
 __pycache__/
 *.pyc
+
+scummvm-xfiles-video.ini
+xfiles-runtime.log
+xfiles-video.log
