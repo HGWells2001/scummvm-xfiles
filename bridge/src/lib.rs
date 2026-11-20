@@ -217,6 +217,11 @@ pub unsafe extern "C" fn xfs_error(b: *const Bridge, out: *mut c_char, capacity:
 pub unsafe extern "C" fn xfs_view(b: *const Bridge) -> u32 {
     b.as_ref().and_then(|b|b.session.as_ref()).and_then(|s|s.r.w.view).unwrap_or(0)
 }
+/// Diagnostic for the cold-start regression check, including the menu's fade-in.
+pub unsafe fn menu_ready(b:*const Bridge)->bool{
+    b.as_ref().and_then(|b|b.session.as_ref()).is_some_and(|s|
+        !s.intro_playing() && s.r.menu_open && s.menu.shown && !s.menu.opening())
+}
 #[no_mangle]
 pub unsafe extern "C" fn xfs_cursor_shown(b: *const Bridge) -> i32 {
     catch_unwind(AssertUnwindSafe(||b.as_ref().and_then(|b|b.session.as_ref()).map_or(0,|s|i32::from(host::game_cursor_shown(s))))).unwrap_or(0)

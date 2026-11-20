@@ -90,6 +90,7 @@ jobs:
           ldd scummvm.exe | awk '/\/mingw64\/bin\// {print $3}' | while read -r dll; do cp "$dll" ../runtime/; done
           cp ../bridge/target/x86_64-pc-windows-gnu/release/smoke.exe ../runtime/xfiles-shiloh-smoke.exe
           cp ../bridge/target/x86_64-pc-windows-gnu/release/folder-check.exe ../runtime/xfiles-folder-check.exe
+          cp ../bridge/target/x86_64-pc-windows-gnu/release/menu-check.exe ../runtime/xfiles-menu-check.exe
           cp ../README.md ../LICENSE ../THIRD_PARTY.md ../runtime/
           cp ../bridge/SHILOH-NOTICES.txt ../runtime/
           cp ../bridge/RUNTIME-DEPENDENCIES.txt ../runtime/
