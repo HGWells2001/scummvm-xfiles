@@ -66,6 +66,7 @@ jobs:
             python
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-freetype
       - name: Prepare reviewed ScummVM source
         run: |
           git clone --filter=blob:none https://github.com/scummvm/scummvm.git upstream
@@ -74,7 +75,7 @@ jobs:
       - name: Build Windows preview
         working-directory: upstream
         run: |
-          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl --opengl-mode=none
+          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl --enable-freetype2 --opengl-mode=none
           make -j4
           mkdir -p ../preview
           cp scummvm.exe ../preview/
@@ -82,6 +83,7 @@ jobs:
           cp ../README.md ../LICENSE ../THIRD_PARTY.md ../preview/
           cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles*.cmd ../preview/
           cp dists/engine-data/fonts.dat gui/themes/scummremastered.zip gui/themes/translations.dat ../preview/
+          cp -r LICENSES ../preview/
           mkdir -p ../preview/tools
           cp ../tools/prepare_data.mjs ../preview/tools/
       - uses: actions/upload-artifact@v4

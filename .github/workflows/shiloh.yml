@@ -60,6 +60,7 @@ jobs:
             python
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-freetype
       - name: Build pinned in-process runtime without SDL frontend
         run: |
           export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"
@@ -75,7 +76,7 @@ jobs:
           git -C upstream checkout FETCH_HEAD
           python tools/install_engine.py upstream
           cd upstream
-          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl --opengl-mode=none
+          ./configure --disable-all-engines --enable-engine=xfiles --disable-debug --disable-updates --disable-cloud --disable-discord --disable-tts --disable-libcurl --enable-freetype2 --opengl-mode=none
           printf '\n#define USE_XFILES_SHILOH\n' >> config.h
           printf '\nLIBS += %s/../bridge/target/x86_64-pc-windows-gnu/release/libxfiles_shiloh.a -luserenv -lws2_32 -lbcrypt -lntdll -lsynchronization\n' "$PWD" >> config.mk
           make -j4
@@ -88,6 +89,7 @@ jobs:
           cp ../bridge/RUNTIME-DEPENDENCIES.txt ../runtime/
           cp ../Prepara-e-Avvia.ps1 ../Avvia-XFiles*.cmd ../runtime/
           cp dists/engine-data/fonts.dat gui/themes/scummremastered.zip gui/themes/translations.dat ../runtime/
+          cp -r LICENSES ../runtime/
           mkdir -p ../runtime/tools
           cp ../tools/prepare_data.mjs ../runtime/tools/
       - name: Verify packaged DLL closure and engine registration

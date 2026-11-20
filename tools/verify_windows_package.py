@@ -37,6 +37,8 @@ def main():
         )
         if result.returncode != 0:
             raise RuntimeError(f"Packaged executable failed {option}: {result.returncode}\n{result.stdout}\n{result.stderr}")
+        if option == "--version" and "FreeType2" not in result.stdout:
+            raise RuntimeError("The packaged executable cannot load the bundled scalable GUI fonts")
         if option == "--list-engines" and "xfiles" not in result.stdout.lower():
             raise RuntimeError("The packaged executable does not register the X-Files engine")
         print(result.stdout.strip())
