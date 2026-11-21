@@ -2,12 +2,16 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44904725592/artifacts/14707926086).
+[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44905688839/artifacts/14708170116).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
 2. Usa la cartella del gioco, per esempio **D:\Giochi scumm\XFiles** oppure **D:\Giochi scumm\XFiles(Ita)**.
 3. Apri scummvm.exe di questa build, scegli **Aggiungi gioco** e seleziona la cartella principale desiderata.
 4. Conferma e premi **Gioca**.
+
+Durante il gioco, **F1** mostra o nasconde le aree cliccabili, inclusi i bersagli
+attivi dei filmati. Quando i riquadri sono visibili, la console registra il punto
+del clic, la scena e l'eventuale reazione del bersaglio.
 
 Per altre copie dei CD, unisci il contenuto dei sette dischi mantenendo le
 sottocartelle MININST, MEDINST, XV, XN, XS, XG, XT e i file NAV*.NMV.
