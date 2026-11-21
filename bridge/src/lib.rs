@@ -8,6 +8,7 @@ use xf::front::{self, Session, host, intro::Start};
 use xf::hdb::Hdb;
 mod prepare;
 mod audio_index;
+mod movie_hotspots;
 pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
     let original=prepare::selected_root(selected)?;
     let data=prepare::data_root(&original)?;
@@ -53,6 +54,7 @@ pub struct Bridge {
     notice: Option<String>,
     arrest_movie: Option<ArrestMovie>,
     frozen_shot_at: Option<u64>,
+    restored_hotspots: movie_hotspots::RestoredHotspots,
 }
 
 impl Drop for Bridge {
@@ -70,6 +72,7 @@ impl Bridge {
     fn restart(&mut self, loaded: Option<Box<Hdb>>, start: Start) {
         self.arrest_movie = None;
         self.frozen_shot_at = None;
+        self.restored_hotspots = movie_hotspots::RestoredHotspots::default();
         let overlay = self.session.as_ref().is_some_and(|s| s.overlay);
         let prefs = self.session.as_ref().map(|s| s.host_prefs.clone());
         let random_seed = self.session.as_ref().and_then(|s| s.r.w.live_rand).unwrap_or_else(|| {
@@ -108,7 +111,13 @@ impl Bridge {
         let s = self.session.as_mut().ok_or("Session unavailable")?;
         let previous_plays = s.r.plays.len();
         let previous_log = s.r.log.len();
+        let previous_media = s.r.media_log.len();
         s.tick(dt.min(250) as u64);
+        let shown = s.preview.is_none().then(|| s.picture_head()).flatten();
+        self.restored_hotspots.update(
+            &mut s.r.movie_hotspots, shown, s.now,
+            s.r.media_log.get(previous_media..).unwrap_or_default(),
+        );
         if s.overlay {
             for line in s.r.log.iter().skip(previous_log) {
                 if line.starts_with("H1282:") || line.starts_with("H1520:") {
@@ -228,7 +237,7 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         prepare::audio_cache(&data,&saves,&original)?;
         let audio_ms=audio_started.elapsed().as_millis();
         let title = Box::into_raw(title); let base = Box::into_raw(base);
-        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None });
+        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None,restored_hotspots:Default::default() });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
         eprintln!("XFILES startup: audio={audio_ms}ms, total={}ms",started.elapsed().as_millis());
         Ok(b)
