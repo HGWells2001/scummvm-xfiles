@@ -2,7 +2,7 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows con riconoscimento italiano e menu corretto](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44813870553/artifacts/14668384187).
+[Scarica la build Windows senza ripristino automatico](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44815652694/artifacts/14670435279).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
 2. Usa la cartella originale **D:\The X-Files** oppure la versione italiana in **D:\Nuova cartella (12)**.
@@ -111,8 +111,8 @@ under `MININST`, rather than at the top level. Add **`D:\The X-Files`**
 to this experimental ScummVM build. Detection searches MININST/MEDINST from
 the selected directory. Language has deliberately been left unknown until verified.
 
-**Media extraction issue found:** ISO9660 associated records (flag `0x04`) share
-filenames with the real data forks on these hybrid discs. The supplied folder has
+**Historical media extraction issue:** ISO9660 associated records (flag `0x04`) share
+filenames with the real data forks on these hybrid discs. The initial folder had
 many 286-byte resource forks instead of playable media. For example, the real
 `NAV1.NMV` on CD1 is 6,143,233 bytes; `X.PFF` is 44,107,692 bytes.
 

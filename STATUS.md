@@ -158,3 +158,12 @@ Build finale a7ef3fe16eabb75d42164d83c589fcec480410a4:
 
 Pacchetto Windows: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44813870553/artifacts/14668384187
 SHA256 ZIP: 08978e571f2f1d66f86b9a8f483d30434daacf2b0ce7ce197392dcc65b453f32
+
+## Rimosso il ripristino automatico dagli ISO
+
+Su richiesta dell'utente, revisione 4113c50425e50b1c50c7bfda754169fc3abbc62c: eliminato il modulo restore.rs, la scansione dei resource fork all'avvio, la ricerca degli ISO, la sostituzione dei file e la relativa callback di avanzamento C++/Rust. Il bridge usa direttamente i dati della cartella selezionata. La diagnostica folder-check ora controlla soltanto il caricamento dei database. Il helper di ricerca case-insensitive delle sottocartelle e stato spostato in prepare.rs per mantenere il supporto MININST/MEDINST e la gestione di LAYOUT.BIN. Riconoscimento italiano e cache QDMC conservati.
+
+Verifiche: controllo sintattico locale MinGW dell'host C++ PASS; nessun riferimento residuo al ripristino o a XFILES_DISC_DIRECTORY nei sorgenti del bridge. Suite 44815652694 e 44815652788 SUCCESS, entrambe terminate: test Rust/ABI e database, avviatore, compilazioni Windows/Linux, decoder e verifica delle DLL del pacchetto. La prova locale del nuovo eseguibile non e stata ripetuta: il trasferimento del pacchetto al PC non era disponibile in questa sessione. Non viene dichiarata una misura del miglioramento dei tempi di avvio.
+
+Pacchetto senza ripristino: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44815652694/artifacts/14670435279
+SHA256 ZIP riportato da GitHub: 2225a6322fd94c859b2548e597cf1cbb8b99a648ccb447793872c49501081e61
