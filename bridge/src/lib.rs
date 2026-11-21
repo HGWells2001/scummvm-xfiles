@@ -26,13 +26,15 @@ const ARREST_HOTSPOT: u32 = 600;
 enum MovieShot {
     UseHitTest,
     Arrest,
+    Location,
     SoundOnly,
 }
 
-fn movie_shot(hit: Option<u32>, has_arrest: bool) -> MovieShot {
+fn movie_shot(hit: Option<u32>, has_arrest: bool, has_targets: bool, location_ending: u32) -> MovieShot {
     use xf::world::devices::{GUN_OWNER, VIDEO_OWNER};
     match hit {
         None | Some(GUN_OWNER | VIDEO_OWNER) if has_arrest => MovieShot::Arrest,
+        None | Some(GUN_OWNER | VIDEO_OWNER) if !has_targets && location_ending != 0 => MovieShot::Location,
         None | Some(GUN_OWNER | VIDEO_OWNER) => MovieShot::SoundOnly,
         _ => MovieShot::UseHitTest,
     }
@@ -104,8 +106,11 @@ impl Bridge {
         self.session.take();
         unsafe { if self.current != self.base { drop(Box::from_raw(self.current)); } }
         self.current = loaded.map_or(self.base, Box::into_raw);
+        let mut rules = front::rules_hyp();
+        // Gordon's Hauling uses a 120-second timer. Use the original NT timer range.
+        rules.set_long_timers(xf::world::LongTimers::Nt);
         // SAFETY: all three Hdb allocations outlive Session. restart and Drop destroy Session first.
-        let mut s = unsafe { Session::with_rules(&*self.title, &*self.current, &self.data, front::rules_hyp()) };
+        let mut s = unsafe { Session::with_rules(&*self.title, &*self.current, &self.data, rules) };
         // Match Shiloh's interactive host. Timed encounters need live random draws
         // to select their target videos and resolve their outcomes.
         s.r.w.live_rand = Some(random_seed);
@@ -145,10 +150,15 @@ impl Bridge {
             for line in s.r.log.iter().skip(previous_log) {
                 if line.starts_with("H1282:") || line.starts_with("H1520:") {
                     eprintln!("XFILES hotspot: {line}");
+                } else if line.contains("H182 game end") || line.starts_with("H1703:") {
+                    eprintln!("XFILES game over: {line}");
                 }
             }
         }
-        if !s.r.frozen {
+        if !s.r.game_running || s.r.rewind_box {
+            self.movie_shot_at = None;
+        }
+        if !s.r.frozen || !s.r.game_running || s.r.rewind_box {
             self.frozen_shot_at = None;
             if self.arrest_movie.take().is_some() {
                 s.preview = None;
@@ -167,7 +177,7 @@ impl Bridge {
             s.play_preview(ARREST_MOVIE);
             self.arrest_movie = Some(ArrestMovie { started_at: s.now, duration, finished: false });
         }
-        if s.r.frozen && s.r.started().contains(&GUNSHOT_SOUND) {
+        if s.r.frozen && s.r.game_running && !s.r.rewind_box && s.r.started().contains(&GUNSHOT_SOUND) {
             let started_at = *self.frozen_shot_at.get_or_insert(s.now);
             if s.now.saturating_sub(started_at) >= s.duration(GUNSHOT_SOUND) {
                 s.r.media_ended(GUNSHOT_SOUND);
@@ -344,10 +354,15 @@ pub unsafe extern "C" fn xfs_pointer(b: *mut Bridge, kind: u32, x: i32, y: i32) 
                             .filter(|clip| !clip.is_still() && matches!(clip.ext().as_str(), "xmv" | "mov"))
                         {
                             let hit = s.r.hit(x, y).map(|c| c.owner);
-                            let has_arrest = s.lib.movie_hotspots(&clip.name).iter().any(|hot| hot.id == ARREST_HOTSPOT);
-                            match movie_shot(hit, has_arrest) {
+                            let hotspots = s.lib.movie_hotspots(&clip.name);
+                            let has_arrest = hotspots.iter().any(|hot| hot.id == ARREST_HOTSPOT);
+                            match movie_shot(hit, has_arrest, !hotspots.is_empty(), s.r.w.gun_view_video()) {
                                 MovieShot::Arrest => {
                                     s.r.click(xf::world::moviehot::MOVIE_HOT_TAG | ARREST_HOTSPOT);
+                                    return Ok(());
+                                }
+                                MovieShot::Location => {
+                                    s.r.click(xf::world::devices::GUN_OWNER);
                                     return Ok(());
                                 }
                                 MovieShot::SoundOnly => {
@@ -469,6 +484,123 @@ pub unsafe extern "C" fn xfs_cursor_shown(b: *const Bridge) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use xf::world::devices::GUN_OWNER;
+
+    fn with_game(test: impl FnOnce(&mut Bridge)) {
+        let Ok(data) = std::env::var("XFILES_TEST_DATA") else { return; };
+        let data = std::ffi::CString::new(data).unwrap();
+        let saves = tempfile_path("game-over");
+        let path = std::ffi::CString::new(saves.join("saves").to_str().unwrap()).unwrap();
+        let mut error = [0i8; 512];
+        unsafe {
+            let ptr = xfs_create(data.as_ptr(), path.as_ptr(), 2, error.as_mut_ptr(), error.len());
+            assert!(!ptr.is_null(), "{}", CStr::from_ptr(error.as_ptr()).to_string_lossy());
+            let mut bridge = Box::from_raw(ptr);
+            for _ in 0..600 {
+                if !bridge.session.as_ref().unwrap().intro_playing() { break; }
+                bridge.step(250).unwrap();
+            }
+            test(&mut bridge);
+        }
+        std::fs::remove_dir_all(saves).unwrap();
+    }
+
+    fn tempfile_path(name: &str) -> PathBuf {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        std::env::temp_dir().join(format!("xfiles-{name}-{stamp}"))
+    }
+
+    fn wait_for_game_over(bridge: &mut Bridge, ending: u32) {
+        for _ in 0..720 {
+            bridge.step(250).unwrap();
+            let s = bridge.session.as_ref().unwrap();
+            if s.r.menu_open || s.r.rewind_box { break; }
+        }
+        let s = bridge.session.as_ref().unwrap();
+        assert!(s.r.plays.iter().any(|play| play.1 == ending), "ending {ending:#x} never played");
+        assert!(s.r.menu_open || s.r.rewind_box, "ending {ending:#x} never resolved");
+        assert_eq!(unsafe { xfs_can_save(bridge) }, 0);
+    }
+
+    #[test]
+    fn arrest_hotspot_plays_and_returns_to_menu() {
+        with_game(|bridge| {
+            let s = bridge.session.as_mut().unwrap();
+            s.r.w.dev.held = Some(7);
+            s.r.click(xf::world::moviehot::MOVIE_HOT_TAG | ARREST_HOTSPOT);
+            wait_for_game_over(bridge, ARREST_MOVIE);
+            let s = bridge.session.as_ref().unwrap();
+            assert!(s.r.menu_open && !s.r.game_running);
+            assert!(s.preview.is_none());
+        });
+    }
+
+    #[test]
+    fn location_shot_plays_the_office_ending() {
+        with_game(|bridge| {
+            let s = bridge.session.as_mut().unwrap();
+            s.r.w.view = None;
+            s.r.w.location = Some(0x12f);
+            s.r.w.dev.held = Some(7);
+            assert_eq!(s.r.w.gun_view_video(), 0x4cc6);
+            let movie = 0x167f4;
+            let clip = s.clip(movie).unwrap();
+            assert!(s.lib.movie_hotspots(&clip.name).is_empty());
+            // Exercise an ordinary cutscene with the field-office location and no scripted target.
+            s.r.background = Some(movie);
+            unsafe { assert_eq!(xfs_pointer(bridge, 1, 320, 200), 0); }
+            wait_for_game_over(bridge, 0x4cc6);
+        });
+    }
+
+    #[test]
+    fn manifest_timer_runs_to_game_over() {
+        with_game(|bridge| {
+            use xf::world::event;
+            let s = bridge.session.as_mut().unwrap();
+            // Reproduce the manifest player's deactivation with Gordon's Hauling active.
+            s.r.w.view = Some(0x1b41);
+            s.r.w.location = Some(0x1ac2);
+            s.r.external_register(0x1ac2, 0x6387);
+            s.r.external_register(0x527e, 0x9d01);
+            s.r.external_fire(0x527e, event::DEACTIVATION);
+            let mut armed = None;
+            for _ in 0..120 {
+                bridge.step(250).unwrap();
+                let s = bridge.session.as_ref().unwrap();
+                if let Some(timer) = s.r.timers.iter().find(|timer| timer.id == 7) {
+                    assert_eq!(timer.paused, None);
+                    armed = Some(s.now);
+                    break;
+                }
+            }
+            let armed = armed.expect("the manifest must arm timer 7");
+            for _ in 0..960 {
+                bridge.step(250).unwrap();
+                let s = bridge.session.as_ref().unwrap();
+                if s.r.menu_open || s.r.rewind_box {
+                    assert!(s.now - armed >= 119_750);
+                    assert!(s.r.posts.iter().any(|message| message.action == 0xa086));
+                    assert!(s.r.log.iter().any(|line| line.contains("H182 game end")));
+                    assert!(s.r.rewind_box, "this route offers a retry");
+                    unsafe {
+                        assert_eq!(xfs_can_save(bridge), 0);
+                        assert_eq!(xfs_pointer(bridge, 1, 320, 278), 0);
+                        assert!(bridge.session.as_ref().unwrap().r.rewind_box);
+                        assert_eq!(xfs_pointer(bridge, 2, 320, 278), 0);
+                        assert_eq!(xfs_pointer(bridge, 1, 365, 278), 0);
+                        assert_eq!(xfs_pointer(bridge, 2, 365, 278), 0);
+                    }
+                    let s = bridge.session.as_ref().unwrap();
+                    assert!(s.r.menu_open && !s.r.game_running && !s.r.rewind_box);
+                    return;
+                }
+            }
+            let s = bridge.session.as_ref().unwrap();
+            panic!("timer 7 never ran the bomb's EndGame action: {:?}",
+                s.r.log.iter().rev().take(15).collect::<Vec<_>>());
+        });
+    }
     #[test]
     fn scummvm_save_round_trip() {
         let Ok(data) = std::env::var("XFILES_TEST_DATA") else { return; };
@@ -504,11 +636,12 @@ mod tests {
     }
     #[test]
     fn movie_shots_keep_scripted_targets_and_allow_shots_elsewhere() {
-        use xf::world::{devices::{GUN_OWNER, VIDEO_OWNER}, moviehot::MOVIE_HOT_TAG};
-        assert!(matches!(movie_shot(Some(MOVIE_HOT_TAG | 221), true), MovieShot::UseHitTest));
-        assert!(matches!(movie_shot(Some(VIDEO_OWNER), true), MovieShot::Arrest));
-        assert!(matches!(movie_shot(Some(GUN_OWNER), false), MovieShot::SoundOnly));
-        assert!(matches!(movie_shot(None, false), MovieShot::SoundOnly));
+        use xf::world::{devices::VIDEO_OWNER, moviehot::MOVIE_HOT_TAG};
+        assert!(matches!(movie_shot(Some(MOVIE_HOT_TAG | 221), true, true, 0x4cc6), MovieShot::UseHitTest));
+        assert!(matches!(movie_shot(Some(VIDEO_OWNER), true, true, 0x4cc8), MovieShot::Arrest));
+        assert!(matches!(movie_shot(Some(GUN_OWNER), false, false, 0x4cc6), MovieShot::Location));
+        assert!(matches!(movie_shot(Some(GUN_OWNER), false, true, 0x4cc6), MovieShot::SoundOnly));
+        assert!(matches!(movie_shot(None, false, false, 0), MovieShot::SoundOnly));
     }
     #[test]
     fn rejects_missing_and_truncated_save_slots() {
@@ -552,4 +685,3 @@ mod tests {
         assert!(CStr::from_ptr(err.as_ptr()).to_string_lossy().contains("database"));
     }}
 }
-

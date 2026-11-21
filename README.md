@@ -44,6 +44,15 @@ La versione italiana viene identificata dai suoi XFILES.HDB e XFILES.GAM come
 italiana esaminata contiene gia i dati completi. Audio, testi e filmati restano
 quelli dei suoi file originali.
 
+## Game over
+
+I filmati con bersagli temporizzati seguono le reazioni previste dalla scena.
+Durante gli altri filmati uno sparo può attivare l'esito previsto dal luogo e
+dal punto della storia. Il filmato dell'arresto torna al menu originale.
+A Gordon’s Hauling il manifesto avvia il conto alla rovescia di 120 secondi
+previsto dagli script del gioco. Quando compare «Try again?», la scelta
+per riprovare usa il checkpoint della scena e l'altra torna al menu originale.
+
 ## Stato e dettagli per sviluppatori
 
 **Experimental integration. A complete playthrough has not been validated.**
