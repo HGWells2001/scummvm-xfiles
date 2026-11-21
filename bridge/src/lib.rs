@@ -207,6 +207,7 @@ fn database(root: &Path, name: &str) -> Result<PathBuf, String> {
         .map(|e| e.path).ok_or_else(|| format!("Missing {name} in the selected game directory"))
 }
 fn read_database(file: &Path) -> Result<Hdb,String> {
+    prepare::ensure_file_backend()?;
     let size=xf::io::fs().size(file).map_err(|e|e.to_string())?;
     if !(24..=128*1024*1024).contains(&size) {return Err("Invalid database size".into());}
     let h=Hdb::open(file).map_err(|e|e.to_string())?;

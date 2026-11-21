@@ -24,9 +24,17 @@ pub fn selected_root(selected:&Path)->Result<PathBuf,String>{
     Ok(selected)
 }
 
+pub fn ensure_file_backend() -> Result<(), String> {
+    static INIT: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *INIT.get_or_init(xf::vfs::install) {
+        Ok(())
+    } else {
+        Err("Game file backend unavailable".into())
+    }
+}
+
 pub fn data_root(selected:&Path)->Result<PathBuf,String>{
-    static INIT:std::sync::OnceLock<bool>=std::sync::OnceLock::new();
-    if !*INIT.get_or_init(xf::vfs::install){return Err("Game file backend unavailable".into());}
+    ensure_file_backend()?;
     // Installer LAYOUT.BIN is not a disc image. Build directory layers explicitly
     // instead of letting an arbitrary .BIN hide an otherwise valid copied CD.
     let mut installs=Vec::new();
@@ -80,6 +88,7 @@ fn decoder()->Result<PathBuf,String>{
 }
 
 pub fn audio_cache(data:&Path,saves:&Path,original:&Path)->Result<(),String>{
+    ensure_file_backend()?;
     let cache=state_directory(&saves.parent().ok_or("Save directory has no parent")?.join("audio-cache"),original)?;
     pcmcache::set_dir(cache.clone());
     let index=super::audio_index::Index::open(original,&cache);
