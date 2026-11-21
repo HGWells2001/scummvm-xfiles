@@ -2,10 +2,10 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows senza ripristino automatico](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44815652694/artifacts/14670435279).
+[Scarica la build Windows con avvio ottimizzato](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44900739233/artifacts/14705524650).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
-2. Usa la cartella originale **D:\The X-Files** oppure la versione italiana in **D:\Nuova cartella (12)**.
+2. Usa la cartella del gioco, per esempio **D:\Giochi scumm\XFiles** oppure **D:\Giochi scumm\XFiles(Ita)**.
 3. Apri scummvm.exe di questa build, scegli **Aggiungi gioco** e seleziona la cartella principale desiderata.
 4. Conferma e premi **Gioca**.
 
@@ -17,6 +17,12 @@ scambiati per immagini CD.
 Questa build legge direttamente sia il layout dei CD sia quello installato.
 Il decoder audio necessario e incluso: la prima preparazione avviene nel motore,
 senza Node.js, ffprobe, installazioni aggiuntive o avviatori CMD/PowerShell.
+Agli avvii successivi un indice dei file e della cache evita di riaprire le
+intestazioni di tutti i filmati. Se cambiano dimensioni o date dei media o della
+cache, il motore ripete la verifica completa; l'audio conserva anche il controllo
+del contenuto quando viene riprodotto. Il primo avvio dopo questo aggiornamento
+crea l'indice. La finestra del gioco viene inizializzata al termine del caricamento,
+senza la schermata nera con "Preparazione del gioco...".
 Cache e salvataggi sono conservati fuori dalla cartella del gioco. Il percorso
 dei salvataggi segue le impostazioni di ScummVM; i tre slot del gioco restano
 nel suo menu originale. L'integrazione con il browser globale dei salvataggi di

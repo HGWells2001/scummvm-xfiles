@@ -167,3 +167,16 @@ Verifiche: controllo sintattico locale MinGW dell'host C++ PASS; nessun riferime
 
 Pacchetto senza ripristino: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44815652694/artifacts/14670435279
 SHA256 ZIP riportato da GitHub: 2225a6322fd94c859b2548e597cf1cbb8b99a648ccb447793872c49501081e61
+
+## Schermata di preparazione e avvii successivi
+
+Rimossa la scritta Preparazione del gioco e spostata la transazione grafica dopo la creazione del core: il motore mostra il gioco quando i dati iniziali sono pronti. La preparazione non conteneva un'attesa artificiale: prima di avviare la sessione venivano riaperte le intestazioni di tutti i filmati anche con audio gia convertito.
+
+Aggiunto audio_index.rs: dopo una verifica completa conserva fuori dai dati del gioco un indice di percorsi, dimensioni e date di modifica dei media e della cache PCM. Un avvio successivo con gli stessi dati evita il controllo delle intestazioni QuickTime e la rivalidazione anticipata di tutti i WAV. Il core continua a controllare dimensione e hash del filmato quando carica il suo audio dalla cache. Se cambiano i file o manca la cache, si torna al controllo completo. Un'intestazione incompleta o temporaneamente illeggibile impedisce di salvare un indice verificato, cosi il controllo viene ritentato. La prima esecuzione dopo l'aggiornamento crea l'indice.
+
+Verifiche automatiche: invalidazione per nuove tracce, media modificati anche a parita di dimensione, cache troncata o eliminata, indice corrotto, altra edizione e intestazioni non leggibili; 6 test Rust PASS. Controllo sintattico locale dell'host C++ PASS. Le cartelle di gioco attuali lette sul PC sono D:\Giochi scumm\XFiles e D:\Giochi scumm\XFiles(Ita). La build di confronto raggiunge view=691 con 175096 campioni audio non nulli sui dati italiani; non viene attribuita questa prova al nuovo eseguibile e non e dichiarata una riduzione misurata dei tempi.
+
+Revisione finale 5a39be89291a1d2869bb8553a477be3eb2fe20ac. Suite finale 44900739233 SUCCESS: sei test Rust, compilazione Windows, decoder minimale, verifica autonoma delle DLL e registrazione del motore. Suite generale 44900422124 SUCCESS per host C++, detector, database, avviatore e compilazioni Windows/Linux. Anche le suite intermedie 44900422134 e 44900709692 sono terminate con SUCCESS. Non ci sono suite ancora in corso per questa modifica. La prova locale del nuovo eseguibile e la misura del guadagno restano da eseguire, per indisponibilita del trasferimento del pacchetto al PC nella sessione.
+
+Pacchetto con avvio ottimizzato: https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44900739233/artifacts/14705524650
+SHA256 ZIP riportato da GitHub: 4c2800b1455733b9eaf16354da4d8fdb63544cfcf7d6c102062dfd7fdc625e95
