@@ -28,17 +28,15 @@ struct ArrestMovie {
     finished: bool,
 }
 
-impl ArrestMovie {
-    fn cue(s: &mut Session<'_>, asset: u32, elapsed: u64) -> Option<front::Cue> {
-        let clip = s.clip(asset)?;
-        let pcm = s.sound(asset)?;
-        let frame = |ms: u64| (ms * u64::from(pcm.rate) / 1000) as usize;
-        let total = pcm.frames();
-        let start = frame(u64::from(clip.start)).min(total);
-        let end = if clip.end > clip.start { frame(u64::from(clip.end)).min(total) } else { total };
-        let pos = start.saturating_add(frame(elapsed));
-        (pos < end).then_some(front::Cue { asset, pcm, pos, start, end, looped: false })
-    }
+fn reaction_cue(s: &mut Session<'_>, asset: u32, elapsed: u64) -> Option<front::Cue> {
+    let clip = s.clip(asset)?;
+    let pcm = s.sound(asset)?;
+    let frame = |ms: u64| (ms * u64::from(pcm.rate) / 1000) as usize;
+    let total = pcm.frames();
+    let start = frame(u64::from(clip.start)).min(total);
+    let end = if clip.end > clip.start { frame(u64::from(clip.end)).min(total) } else { total };
+    let pos = start.saturating_add(frame(elapsed));
+    (pos < end).then_some(front::Cue { asset, pcm, pos, start, end, looped: false })
 }
 
 pub struct Bridge {
@@ -54,6 +52,7 @@ pub struct Bridge {
     error: String,
     notice: Option<String>,
     arrest_movie: Option<ArrestMovie>,
+    frozen_shot_at: Option<u64>,
 }
 
 impl Drop for Bridge {
@@ -70,6 +69,8 @@ impl Drop for Bridge {
 impl Bridge {
     fn restart(&mut self, loaded: Option<Box<Hdb>>, start: Start) {
         self.arrest_movie = None;
+        self.frozen_shot_at = None;
+        let overlay = self.session.as_ref().is_some_and(|s| s.overlay);
         let prefs = self.session.as_ref().map(|s| s.host_prefs.clone());
         let random_seed = self.session.as_ref().and_then(|s| s.r.w.live_rand).unwrap_or_else(|| {
             std::time::SystemTime::now()
@@ -86,6 +87,7 @@ impl Bridge {
         // to select their target videos and resolve their outcomes.
         s.r.w.live_rand = Some(random_seed);
         s.game_cursor = true;
+        s.overlay = overlay;
         s.set_saves(xf::save::Slots::open(&self.saves));
         if let Some(p) = prefs { s.host_prefs = p; }
         else if let Ok(t) = std::fs::read_to_string(self.saves.join("host-prefs.txt")) {
@@ -105,8 +107,17 @@ impl Bridge {
     fn step(&mut self, dt: u32) -> Result<(), String> {
         let s = self.session.as_mut().ok_or("Session unavailable")?;
         let previous_plays = s.r.plays.len();
+        let previous_log = s.r.log.len();
         s.tick(dt.min(250) as u64);
+        if s.overlay {
+            for line in s.r.log.iter().skip(previous_log) {
+                if line.starts_with("H1282:") || line.starts_with("H1520:") {
+                    eprintln!("XFILES hotspot: {line}");
+                }
+            }
+        }
         if !s.r.frozen {
+            self.frozen_shot_at = None;
             if self.arrest_movie.take().is_some() {
                 s.preview = None;
             }
@@ -123,6 +134,13 @@ impl Bridge {
             let duration = s.duration(ARREST_MOVIE).max(1);
             s.play_preview(ARREST_MOVIE);
             self.arrest_movie = Some(ArrestMovie { started_at: s.now, duration, finished: false });
+        }
+        if s.r.frozen && s.r.started().contains(&GUNSHOT_SOUND) {
+            let started_at = *self.frozen_shot_at.get_or_insert(s.now);
+            if s.now.saturating_sub(started_at) >= s.duration(GUNSHOT_SOUND) {
+                s.r.media_ended(GUNSHOT_SOUND);
+                self.frozen_shot_at = None;
+            }
         }
         if s.prefs_saved {
             if let Err(error) = std::fs::write(self.saves.join("host-prefs.txt"), front::settings::host_prefs_text(&s.host_prefs)) {
@@ -210,7 +228,7 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         prepare::audio_cache(&data,&saves,&original)?;
         let audio_ms=audio_started.elapsed().as_millis();
         let title = Box::into_raw(title); let base = Box::into_raw(base);
-        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None });
+        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
         eprintln!("XFILES startup: audio={audio_ms}ms, total={}ms",started.elapsed().as_millis());
         Ok(b)
@@ -241,7 +259,17 @@ pub unsafe extern "C" fn xfs_pointer(b: *mut Bridge, kind: u32, x: i32, y: i32) 
         let point=(x>=0 && x<640 && y>=0 && y<480).then_some((x,y));
         match kind {
             0 => {host::motion(s,point);},
-            1 => {host::button(s,host::Button::Left,point);},
+            1 => {
+                if s.overlay && !s.intro_playing() && !s.r.game_paused() && !s.r.frozen {
+                    if let Some((x, y)) = point {
+                        let movie = s.picture_head();
+                        let hit = s.r.hit(x, y);
+                        eprintln!("XFILES hotspot click ({x},{y}): view={:?}, movie/time={movie:?}, held={}, target={hit:?}",
+                            s.r.w.view, s.r.w.inventory_value());
+                    }
+                }
+                host::button(s,host::Button::Left,point);
+            },
             2 => {host::release(s,host::Button::Left,point);},
             3 => {host::button(s,host::Button::Right,point);},
             4 => {host::release(s,host::Button::Right,point);},
@@ -257,6 +285,8 @@ pub unsafe extern "C" fn xfs_key(b: *mut Bridge, code: u32, modifiers: u32) -> i
         let s=b.session.as_mut().ok_or("Session unavailable")?;
         if modifiers&1!=0 {
             if matches!(host::alt(s,code,modifiers&2!=0), front::altkeys::AltOut::Exit) {b.quit=true;}
+        } else if code == 0x70 {
+            s.overlay = !s.overlay;
         } else {host::key(s,code);}
         Ok(())
     })
@@ -276,10 +306,13 @@ pub unsafe extern "C" fn xfs_mix(b: *mut Bridge, out: *mut i16, samples: usize) 
     call(b,|b| {
         let s=b.session.as_mut().ok_or("Session unavailable")?;
         let mut cues = s.audio_cues();
-        if let Some(movie) = b.arrest_movie.as_ref().filter(|m| !m.finished && s.r.frozen && !s.r.menu_open) {
-            let elapsed = s.now.saturating_sub(movie.started_at);
-            cues.extend(ArrestMovie::cue(s, GUNSHOT_SOUND, elapsed));
-            cues.extend(ArrestMovie::cue(s, ARREST_MOVIE, elapsed));
+        if s.r.frozen && !s.r.menu_open && !s.r.menu_screen_up() {
+            if let Some(start) = b.frozen_shot_at {
+                cues.extend(reaction_cue(s, GUNSHOT_SOUND, s.now.saturating_sub(start)));
+            }
+            if let Some(movie) = b.arrest_movie.as_ref().filter(|m| !m.finished) {
+                cues.extend(reaction_cue(s, ARREST_MOVIE, s.now.saturating_sub(movie.started_at)));
+            }
         }
         b.mix.volume=host::volume(s);b.mix.sync(&cues);
         b.mix.fill(std::slice::from_raw_parts_mut(out,samples));Ok(())
@@ -355,4 +388,3 @@ mod tests {
         assert!(CStr::from_ptr(err.as_ptr()).to_string_lossy().contains("database"));
     }}
 }
-

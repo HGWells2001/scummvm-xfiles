@@ -61,6 +61,7 @@ uint32 virtualKey(const Common::KeyState &key){
 	if(c>=Common::KEYCODE_0 && c<=Common::KEYCODE_9)return '0'+c-Common::KEYCODE_0;
 	if(c>=Common::KEYCODE_KP0 && c<=Common::KEYCODE_KP9)return '0'+c-Common::KEYCODE_KP0;
 	switch(c){
+	case Common::KEYCODE_F1:return 0x70;
 	case Common::KEYCODE_RETURN: case Common::KEYCODE_KP_ENTER:return 13;
 	case Common::KEYCODE_ESCAPE:return 27;
 	case Common::KEYCODE_BACKSPACE:return 8;

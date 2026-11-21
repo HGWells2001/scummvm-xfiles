@@ -18,6 +18,14 @@ fn main(){
         if failed{xfs_error(core,err.as_mut_ptr(),err.len());eprintln!("{}",std::ffi::CStr::from_ptr(err.as_ptr()).to_string_lossy());}
         else{
             println!("Shiloh/ScummVM core smoke: 120 ticks, view={}, lit_bytes={}, nonzero_audio={}",xfs_view(core),frame.iter().filter(|&&v|v!=0).count(),nonzero_audio);
+            let mut overlay = vec![0; frame.len()];
+            let header = 640 * 3 * 15;
+            assert_eq!(xfs_key(core, 0x70, 0), 0);
+            assert_eq!(xfs_frame(core, overlay.as_mut_ptr(), overlay.len()), 0);
+            assert_ne!(overlay[..header], frame[..header], "F1 should draw hotspot diagnostics");
+            assert_eq!(xfs_key(core, 0x70, 0), 0);
+            assert_eq!(xfs_frame(core, overlay.as_mut_ptr(), overlay.len()), 0);
+            assert_eq!(overlay[..header], frame[..header], "F1 should hide hotspot diagnostics");
             if let Some(path)=args.get(3){let mut b=b"P6\n640 480\n255\n".to_vec();b.extend(&frame);std::fs::write(path,b).unwrap();}
         }
         xfs_destroy(core);if failed{std::process::exit(1);}
