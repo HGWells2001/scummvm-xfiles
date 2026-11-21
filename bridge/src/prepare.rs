@@ -88,11 +88,11 @@ pub fn audio_cache(data:&Path,saves:&Path,original:&Path)->Result<(),String>{
     }
     let lib=MediaLib::new(data);
     let mut files:Vec<PathBuf>=lib.entries().map(|(_,p)|p.clone()).collect();files.sort();files.dedup();
-    let mut executable=None;let mut made=0;let mut kept=0;
+    let mut executable=None;let mut made=0;let mut kept=0;let mut indexable=true;
     for file in files{
         let ext=file.extension().map(|x|x.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
         if !matches!(ext.as_str(),"xmv"|"nmv"|"amv"|"dmv"|"mus"|"mov"){continue;}
-        let Ok(movie)=Movie::open_header(&file)else{continue;};
+        let Ok(movie)=Movie::open_header(&file)else{indexable=false;continue;};
         let Some(track)=audio::sound_track(&movie).filter(|t|&t.fourcc==b"QDMC")else{continue;};
         let bytes=xf::io::read(&file).map_err(|e|e.to_string())?;
         if pcmcache::is_fresh(&cache,&file,&bytes){kept+=1;continue;}
@@ -122,12 +122,22 @@ pub fn audio_cache(data:&Path,saves:&Path,original:&Path)->Result<(),String>{
         made+=1;
     }
     eprintln!("XFILES native audio: {made} prepared, {kept} cached");
-    if let Some(index)=index{index.commit(made+kept);}
+    if indexable{if let Some(index)=index{index.commit(made+kept);}}
     Ok(())
 }
 
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn unreadable_movie_header_never_becomes_a_verified_audio_index(){
+        let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root=std::env::temp_dir().join(format!("xfiles-incomplete-audio-{stamp}"));
+        let data=root.join("game");let saves=root.join("saves/xfiles");let cache=root.join("saves/audio-cache");
+        std::fs::create_dir_all(data.join("XV")).unwrap();std::fs::create_dir_all(cache.join(pcmcache::SUBDIR)).unwrap();
+        std::fs::write(data.join("XV/broken.XMV"),b"incomplete QuickTime header").unwrap();
+        audio_cache(&data,&saves,&data.canonicalize().unwrap()).unwrap();
+        assert!(super::super::audio_index::Index::open(&data,&cache).unwrap().verified().is_none());
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]fn copied_cd_folder_is_layered_without_copying_game_files(){
         let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let root=std::env::temp_dir().join(format!("xfiles-cd-layout-{stamp}"));
