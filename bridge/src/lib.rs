@@ -17,6 +17,29 @@ pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
 }
 
 const PIXELS: usize = 640 * 480 * 3;
+const ARREST_MOVIE: u32 = 0x4cc8;
+const GUNSHOT_SOUND: u32 = 0x87b7;
+
+// A successful hotspot 600 hit freezes the world before posting this movie.
+// Its picture and sound need a clock independent of the frozen scene.
+struct ArrestMovie {
+    started_at: u64,
+    duration: u64,
+    finished: bool,
+}
+
+impl ArrestMovie {
+    fn cue(s: &mut Session<'_>, asset: u32, elapsed: u64) -> Option<front::Cue> {
+        let clip = s.clip(asset)?;
+        let pcm = s.sound(asset)?;
+        let frame = |ms: u64| (ms * u64::from(pcm.rate) / 1000) as usize;
+        let total = pcm.frames();
+        let start = frame(u64::from(clip.start)).min(total);
+        let end = if clip.end > clip.start { frame(u64::from(clip.end)).min(total) } else { total };
+        let pos = start.saturating_add(frame(elapsed));
+        (pos < end).then_some(front::Cue { asset, pcm, pos, start, end, looped: false })
+    }
+}
 
 pub struct Bridge {
     // These boxes have stable addresses. Session is always dropped before any referenced box.
@@ -30,6 +53,7 @@ pub struct Bridge {
     quit: bool,
     error: String,
     notice: Option<String>,
+    arrest_movie: Option<ArrestMovie>,
 }
 
 impl Drop for Bridge {
@@ -45,6 +69,7 @@ impl Drop for Bridge {
 
 impl Bridge {
     fn restart(&mut self, loaded: Option<Box<Hdb>>, start: Start) {
+        self.arrest_movie = None;
         let prefs = self.session.as_ref().map(|s| s.host_prefs.clone());
         let random_seed = self.session.as_ref().and_then(|s| s.r.w.live_rand).unwrap_or_else(|| {
             std::time::SystemTime::now()
@@ -79,7 +104,26 @@ impl Bridge {
 
     fn step(&mut self, dt: u32) -> Result<(), String> {
         let s = self.session.as_mut().ok_or("Session unavailable")?;
+        let previous_plays = s.r.plays.len();
         s.tick(dt.min(250) as u64);
+        if !s.r.frozen {
+            if self.arrest_movie.take().is_some() {
+                s.preview = None;
+            }
+        } else if let Some(movie) = self.arrest_movie.as_mut() {
+            if !movie.finished && s.now.saturating_sub(movie.started_at) >= movie.duration {
+                movie.finished = true;
+                s.r.media_ended(ARREST_MOVIE);
+            }
+            if movie.finished {
+                // Hold the last frame while the world remains frozen.
+                s.preview = Some((ARREST_MOVIE, s.now.saturating_sub(movie.duration - 1)));
+            }
+        } else if s.r.plays.iter().skip(previous_plays).any(|play| play.1 == ARREST_MOVIE) {
+            let duration = s.duration(ARREST_MOVIE).max(1);
+            s.play_preview(ARREST_MOVIE);
+            self.arrest_movie = Some(ArrestMovie { started_at: s.now, duration, finished: false });
+        }
         if s.prefs_saved {
             if let Err(error) = std::fs::write(self.saves.join("host-prefs.txt"), front::settings::host_prefs_text(&s.host_prefs)) {
                 eprintln!("XFILES: could not write preferences: {error}");
@@ -166,7 +210,7 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         prepare::audio_cache(&data,&saves,&original)?;
         let audio_ms=audio_started.elapsed().as_millis();
         let title = Box::into_raw(title); let base = Box::into_raw(base);
-        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None });
+        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
         eprintln!("XFILES startup: audio={audio_ms}ms, total={}ms",started.elapsed().as_millis());
         Ok(b)
@@ -231,7 +275,13 @@ pub unsafe extern "C" fn xfs_mix(b: *mut Bridge, out: *mut i16, samples: usize) 
     if out.is_null() || samples==0 || samples>44100 || samples%2!=0 {return -1;}
     call(b,|b| {
         let s=b.session.as_mut().ok_or("Session unavailable")?;
-        b.mix.volume=host::volume(s);b.mix.sync(&s.audio_cues());
+        let mut cues = s.audio_cues();
+        if let Some(movie) = b.arrest_movie.as_ref().filter(|m| !m.finished && s.r.frozen && !s.r.menu_open) {
+            let elapsed = s.now.saturating_sub(movie.started_at);
+            cues.extend(ArrestMovie::cue(s, GUNSHOT_SOUND, elapsed));
+            cues.extend(ArrestMovie::cue(s, ARREST_MOVIE, elapsed));
+        }
+        b.mix.volume=host::volume(s);b.mix.sync(&cues);
         b.mix.fill(std::slice::from_raw_parts_mut(out,samples));Ok(())
     })
 }
