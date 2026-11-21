@@ -40,6 +40,27 @@ fn movie_shot(hit: Option<u32>, has_arrest: bool, has_targets: bool, location_en
     }
 }
 
+fn click_frozen_note(s: &mut Session<'_>, x: i32, y: i32) -> bool {
+    use xf::world::class::INTERFACE_ITEM;
+
+    if !s.r.frozen || s.r.game_paused() || s.r.rewind_box || s.alt.msgbox.is_some() {
+        return false;
+    }
+    let note_layouts = &s.r.w.h.exe.suicide_note_layouts;
+    let mut items = s.r.clickables();
+    items.retain(|item| item.cls == INTERFACE_ITEM && s.r.w.layouts().iter().any(|(layout, members)| {
+        note_layouts.contains(layout) && members.iter().any(|&(owner, _)| owner == item.owner)
+    }));
+    let Some(item) = s.r.hit_in(&items, x, y) else { return false; };
+
+    // Let the original button hide the layout and run its EndGame action.
+    if s.r.click_clickable(item) {
+        s.r.run(100_000);
+        return true;
+    }
+    false
+}
+
 // A successful hotspot 600 hit freezes the world before posting this movie.
 // Its picture and sound need a clock independent of the frozen scene.
 struct ArrestMovie {
@@ -345,6 +366,9 @@ pub unsafe extern "C" fn xfs_pointer(b: *mut Bridge, kind: u32, x: i32, y: i32) 
         match kind {
             0 => {host::motion(s,point);},
             1 => {
+                if point.is_some_and(|(x, y)| click_frozen_note(s, x, y)) {
+                    return Ok(());
+                }
                 if let Some((x, y)) = point.filter(|&(x, y)| (20..620).contains(&x) && (90..330).contains(&y)) {
                     if s.r.w.dev.held == Some(7) && !s.intro_playing() && !s.r.game_paused()
                         && !s.r.frozen && !s.r.rewind_box && s.alt.msgbox.is_none()
@@ -532,6 +556,103 @@ mod tests {
             let s = bridge.session.as_ref().unwrap();
             assert!(s.r.menu_open && !s.r.game_running);
             assert!(s.preview.is_none());
+        });
+    }
+
+    #[test]
+    fn both_frozen_notes_accept_only_their_original_button() {
+        use xf::world::Out;
+
+        with_game(|bridge| {
+            for (layout, owner, action) in [(0xf57f, 0xf584, 0xf589), (0xf581, 0xf58e, 0xf593)] {
+                bridge.restart(None, Start::NewGame);
+                for _ in 0..600 {
+                    if unsafe { xfs_can_save(bridge) } != 0 { break; }
+                    bridge.step(250).unwrap();
+                }
+                let s = bridge.session.as_mut().unwrap();
+                assert!(s.r.w.h.exe.suicide_note_layouts.contains(&layout));
+                s.r.w.out.push(Out::Freeze { hotspot: 500 });
+                s.r.viewer_show_layout(layout);
+                bridge.step(16).unwrap();
+                let s = bridge.session.as_ref().unwrap();
+                assert!(s.r.frozen);
+                let button = s.r.clickables().into_iter().find(|item| item.owner == owner).unwrap();
+                let [left, top, right, bottom] = button.rect.map(i32::from);
+                let (x, y) = ((left + right) / 2, (top + bottom) / 2);
+                let (outside_x, outside_y) = [(0, 0), (639, 0), (0, 479), (639, 479)]
+                    .into_iter()
+                    .find(|&(x, y)| !(left..right).contains(&x) || !(top..bottom).contains(&y))
+                    .unwrap_or((-1, -1));
+                unsafe {
+                    assert_eq!(xfs_pointer(bridge, 1, outside_x, outside_y), 0);
+                    assert_eq!(xfs_pointer(bridge, 3, x, y), 0);
+                    assert_eq!(xfs_tick(bridge, 16), 0);
+                    let s = bridge.session.as_ref().unwrap();
+                    assert!(s.r.frozen && !s.r.menu_open);
+                    assert_eq!(xfs_pointer(bridge, 1, x, y), 0);
+                    assert_eq!(xfs_tick(bridge, 16), 0);
+                }
+                let s = bridge.session.as_ref().unwrap();
+                assert!(s.r.menu_open && !s.r.game_running);
+                assert!(!s.r.w.layouts().iter().any(|(id, _)| *id == layout));
+                assert!(s.r.log.iter().any(|line| line.starts_with(&format!("action {action:#x}: H182 game end"))));
+            }
+        });
+    }
+
+    #[test]
+    fn original_ending_movies_dispatch_their_end_game_actions() {
+        use xf::world::{event, Msg};
+
+        const MOVIE_ENDINGS: [(u32, u32); 25] = [
+            (0x4cc2, 0x9618), (0x4cc4, 0x961c), (0x5b74, 0x9b7d),
+            (0x57e9, 0xa011), (0xac43, 0xacf3), (0x5b76, 0xb332),
+            (0x5520, 0xb377), (0x4cc8, 0xc0f2), (0x4cd2, 0xc903),
+            (0x4cc6, 0xc9b6), (0xa83e, 0xc9ba), (0x52fc, 0xdace),
+            (0x52fa, 0xdacf), (0x54dc, 0xdad3), (0x54de, 0xdad6),
+            (0x54da, 0xdad9), (0x5442, 0x1047f), (0xa162, 0x10bc7),
+            (0xa164, 0x10bcd), (0xcafd, 0x10bd3), (0xcaff, 0x10bd9),
+            (0xcb01, 0x10be3), (0x52b0, 0x15e6d), (0x5314, 0x15fc4),
+            (0xbf7b, 0x16b30),
+        ];
+
+        with_game(|bridge| {
+            let s = bridge.session.as_mut().unwrap();
+            for (movie, action) in MOVIE_ENDINGS {
+                s.reload_core(s.r.w.gam);
+                assert!(s.clip(movie).is_some(), "missing ending movie {movie:#x}");
+                // Exercise the direct ending after the one-time alternate has played.
+                for getter in [0xf498, 0xf49a] {
+                    s.r.w.execute(Msg { action: getter, trigger: 0 });
+                }
+                s.r.w.vars.set_native(0x5d7, Some(b'd' as i32), 0);
+                let triggers = s.r.w.trigger_list_of(movie).unwrap();
+                s.r.external_register(movie, triggers);
+                s.r.external_fire(movie, event::DEACTIVATION);
+                for _ in 0..480 {
+                    s.tick(250);
+                    if s.r.menu_open || s.r.rewind_box { break; }
+                }
+                let end_log = format!("action {action:#x}: H182 game end");
+                assert!(s.r.log.iter().any(|line| line.starts_with(&end_log)),
+                    "movie {movie:#x} did not dispatch {action:#x}: {:?}", s.r.log);
+                assert!(s.r.rewind_box || (s.r.menu_open && !s.r.game_running));
+            }
+
+            // This view ends the game on a timer instead of a movie's deactivation.
+            const TIMED_VIEW: u32 = 0x16f08;
+            s.reload_core(s.r.w.gam);
+            s.r.w.view = Some(TIMED_VIEW);
+            s.r.external_register(TIMED_VIEW, s.r.w.trigger_list_of(TIMED_VIEW).unwrap());
+            s.tick(0);
+            let timer = s.r.timers.iter().find(|timer| timer.id == 10).unwrap();
+            assert_eq!(timer.due - s.now, 14_000);
+            s.tick(13_999);
+            assert!(!s.r.menu_open && !s.r.rewind_box);
+            s.tick(1);
+            assert!(s.r.log.iter().any(|line| line.starts_with("action 0x16f16: H182 game end")));
+            assert!(s.r.rewind_box || (s.r.menu_open && !s.r.game_running));
         });
     }
 

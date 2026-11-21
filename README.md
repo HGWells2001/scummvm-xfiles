@@ -50,7 +50,8 @@ I filmati con bersagli temporizzati seguono le reazioni previste dalla scena.
 Durante gli altri filmati uno sparo può attivare l'esito previsto dal luogo e
 dal punto della storia. Il filmato dell'arresto torna al menu originale.
 A Gordon’s Hauling il manifesto avvia il conto alla rovescia di 120 secondi
-previsto dagli script del gioco. Quando compare «Try again?», la scelta
+previsto dagli script del gioco. Un clic sinistro sulla schermata della nota
+esegue la sua azione di fine partita. Quando compare «Try again?», la scelta
 per riprovare usa il checkpoint della scena e l'altra torna al menu originale.
 
 ## Stato e dettagli per sviluppatori
