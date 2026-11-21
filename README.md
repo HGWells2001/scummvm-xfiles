@@ -2,7 +2,7 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44908195469/artifacts/14708522374).
+[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44909551188/artifacts/14709840076).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
 2. Usa la cartella del gioco, per esempio **D:\Giochi scumm\XFiles** oppure **D:\Giochi scumm\XFiles(Ita)**.
