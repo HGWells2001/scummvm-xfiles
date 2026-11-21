@@ -134,8 +134,9 @@ pub fn audio_cache(data:&Path,saves:&Path,original:&Path)->Result<(),String>{
         let data=root.join("game");let saves=root.join("saves/xfiles");let cache=root.join("saves/audio-cache");
         std::fs::create_dir_all(data.join("XV")).unwrap();std::fs::create_dir_all(cache.join(pcmcache::SUBDIR)).unwrap();
         std::fs::write(data.join("XV/broken.XMV"),b"incomplete QuickTime header").unwrap();
-        audio_cache(&data,&saves,&data.canonicalize().unwrap()).unwrap();
-        assert!(super::super::audio_index::Index::open(&data,&cache).unwrap().verified().is_none());
+        let selected=data.canonicalize().unwrap();
+        audio_cache(&selected,&saves,&selected).unwrap();
+        assert!(super::super::audio_index::Index::open(&selected,&cache).unwrap().verified().is_none());
         std::fs::remove_dir_all(root).unwrap();
     }
     #[test]fn copied_cd_folder_is_layered_without_copying_game_files(){
