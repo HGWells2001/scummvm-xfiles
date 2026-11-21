@@ -20,6 +20,22 @@ pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
 const PIXELS: usize = 640 * 480 * 3;
 const ARREST_MOVIE: u32 = 0x4cc8;
 const GUNSHOT_SOUND: u32 = 0x87b7;
+const ARREST_HOTSPOT: u32 = 600;
+
+enum MovieShot {
+    UseHitTest,
+    Arrest,
+    SoundOnly,
+}
+
+fn movie_shot(hit: Option<u32>, has_arrest: bool) -> MovieShot {
+    use xf::world::devices::{GUN_OWNER, VIDEO_OWNER};
+    match hit {
+        None | Some(GUN_OWNER | VIDEO_OWNER) if has_arrest => MovieShot::Arrest,
+        None | Some(GUN_OWNER | VIDEO_OWNER) => MovieShot::SoundOnly,
+        _ => MovieShot::UseHitTest,
+    }
+}
 
 // A successful hotspot 600 hit freezes the world before posting this movie.
 // Its picture and sound need a clock independent of the frozen scene.
@@ -54,6 +70,7 @@ pub struct Bridge {
     notice: Option<String>,
     arrest_movie: Option<ArrestMovie>,
     frozen_shot_at: Option<u64>,
+    movie_shot_at: Option<u64>,
     restored_hotspots: movie_hotspots::RestoredHotspots,
 }
 
@@ -72,6 +89,7 @@ impl Bridge {
     fn restart(&mut self, loaded: Option<Box<Hdb>>, start: Start) {
         self.arrest_movie = None;
         self.frozen_shot_at = None;
+        self.movie_shot_at = None;
         self.restored_hotspots = movie_hotspots::RestoredHotspots::default();
         let overlay = self.session.as_ref().is_some_and(|s| s.overlay);
         let captions = self.session.as_ref().map(|s| s.r.w.closed_captioning());
@@ -242,7 +260,7 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         prepare::audio_cache(&data,&saves,&original)?;
         let audio_ms=audio_started.elapsed().as_millis();
         let title = Box::into_raw(title); let base = Box::into_raw(base);
-        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None,restored_hotspots:Default::default() });
+        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None,movie_shot_at:None,restored_hotspots:Default::default() });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
         eprintln!("XFILES startup: audio={audio_ms}ms, total={}ms",started.elapsed().as_millis());
         Ok(b)
@@ -274,6 +292,37 @@ pub unsafe extern "C" fn xfs_pointer(b: *mut Bridge, kind: u32, x: i32, y: i32) 
         match kind {
             0 => {host::motion(s,point);},
             1 => {
+                if let Some((x, y)) = point.filter(|&(x, y)| (20..620).contains(&x) && (90..330).contains(&y)) {
+                    if s.r.w.dev.held == Some(7) && !s.intro_playing() && !s.r.game_paused()
+                        && !s.r.frozen && !s.r.rewind_box && s.alt.msgbox.is_none()
+                    {
+                        let movie = s.r.video_playing().or(s.r.background);
+                        if let Some(clip) = movie.and_then(|asset| s.clip(asset))
+                            .filter(|clip| !clip.is_still() && matches!(clip.ext().as_str(), "xmv" | "mov"))
+                        {
+                            let hit = s.r.hit(x, y).map(|c| c.owner);
+                            let has_arrest = s.lib.movie_hotspots(&clip.name).iter().any(|hot| hot.id == ARREST_HOTSPOT);
+                            match movie_shot(hit, has_arrest) {
+                                MovieShot::Arrest => {
+                                    s.r.click(xf::world::moviehot::MOVIE_HOT_TAG | ARREST_HOTSPOT);
+                                    return Ok(());
+                                }
+                                MovieShot::SoundOnly => {
+                                    b.movie_shot_at = Some(s.now);
+                                    b.mix.voices.retain(|voice| voice.asset != GUNSHOT_SOUND);
+                                    return Ok(());
+                                }
+                                MovieShot::UseHitTest => {
+                                    if hit.is_some_and(xf::world::moviehot::is_movie_hot) {
+                                        // Prefer the scripted sound if the reaction starts one.
+                                        b.movie_shot_at = Some(s.now);
+                                        b.mix.voices.retain(|voice| voice.asset != GUNSHOT_SOUND);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 if s.overlay && !s.intro_playing() && !s.r.game_paused() && !s.r.frozen {
                     if let Some((x, y)) = point {
                         let movie = s.picture_head();
@@ -324,6 +373,19 @@ pub unsafe extern "C" fn xfs_mix(b: *mut Bridge, out: *mut i16, samples: usize) 
     call(b,|b| {
         let s=b.session.as_mut().ok_or("Session unavailable")?;
         let mut cues = s.audio_cues();
+        if let Some(start) = b.movie_shot_at {
+            if !s.r.game_paused() && !s.r.started().contains(&GUNSHOT_SOUND)
+                && b.frozen_shot_at.is_none() && !cues.iter().any(|cue| cue.asset == GUNSHOT_SOUND)
+            {
+                if let Some(cue) = reaction_cue(s, GUNSHOT_SOUND, s.now.saturating_sub(start)) {
+                    cues.push(cue);
+                } else {
+                    b.movie_shot_at = None;
+                }
+            } else {
+                b.movie_shot_at = None;
+            }
+        }
         if s.r.frozen && !s.r.menu_open && !s.r.menu_screen_up() {
             if let Some(start) = b.frozen_shot_at {
                 cues.extend(reaction_cue(s, GUNSHOT_SOUND, s.now.saturating_sub(start)));
@@ -364,6 +426,14 @@ pub unsafe extern "C" fn xfs_cursor_shown(b: *const Bridge) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn movie_shots_keep_scripted_targets_and_allow_shots_elsewhere() {
+        use xf::world::{devices::{GUN_OWNER, VIDEO_OWNER}, moviehot::MOVIE_HOT_TAG};
+        assert!(matches!(movie_shot(Some(MOVIE_HOT_TAG | 221), true), MovieShot::UseHitTest));
+        assert!(matches!(movie_shot(Some(VIDEO_OWNER), true), MovieShot::Arrest));
+        assert!(matches!(movie_shot(Some(GUN_OWNER), false), MovieShot::SoundOnly));
+        assert!(matches!(movie_shot(None, false), MovieShot::SoundOnly));
+    }
     #[test]
     fn rejects_missing_and_truncated_save_slots() {
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
@@ -406,3 +476,4 @@ mod tests {
         assert!(CStr::from_ptr(err.as_ptr()).to_string_lossy().contains("database"));
     }}
 }
+
