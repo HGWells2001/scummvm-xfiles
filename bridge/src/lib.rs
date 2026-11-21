@@ -18,6 +18,7 @@ pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
 }
 
 const PIXELS: usize = 640 * 480 * 3;
+const MAX_SAVE_BYTES: usize = 128 * 1024 * 1024;
 const ARREST_MOVIE: u32 = 0x4cc8;
 const GUNSHOT_SOUND: u32 = 0x87b7;
 const ARREST_HOTSPOT: u32 = 600;
@@ -228,7 +229,10 @@ fn read_database(file: &Path) -> Result<Hdb,String> {
     prepare::ensure_file_backend()?;
     let size=xf::io::fs().size(file).map_err(|e|e.to_string())?;
     if !(24..=128*1024*1024).contains(&size) {return Err("Invalid database size".into());}
-    let h=Hdb::open(file).map_err(|e|e.to_string())?;
+    validate_database(Hdb::open(file).map_err(|e|e.to_string())?)
+}
+
+fn validate_database(h: Hdb) -> Result<Hdb, String> {
     if h.version!=0x501 || !(1..=5).contains(&h.app_version) || h.nclasses==0 || h.nclasses>4096 || h.classes.len()!=h.nclasses as usize {
         return Err("Unsupported or inconsistent NeoAccess database".into());
     }
@@ -239,6 +243,45 @@ fn read_database(file: &Path) -> Result<Hdb,String> {
         }
     }
     Ok(h)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn xfs_can_save(b: *const Bridge) -> i32 {
+    b.as_ref().and_then(|b| b.session.as_ref()).map_or(0, |s| {
+        i32::from(s.r.game_running && s.r.w.view.is_some() && !s.intro_playing()
+            && !s.r.frozen && !s.r.rewind_box && !s.r.game_paused() && s.alt.msgbox.is_none()
+            && s.r.video_playing().is_none() && s.r.pending() == 0)
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn xfs_export_save(
+    b: *mut Bridge,
+    sink: unsafe extern "C" fn(*mut std::ffi::c_void, *const u8, usize) -> i32,
+    context: *mut std::ffi::c_void,
+) -> i32 {
+    call(b, |b| {
+        if xfs_can_save(b) == 0 { return Err("Game state is not ready to save".into()); }
+        let session = b.session.as_mut().ok_or("Session unavailable")?;
+        let (bytes, _) = session.save_bytes()?;
+        if bytes.len() > MAX_SAVE_BYTES || sink(context, bytes.as_ptr(), bytes.len()) == 0 {
+            return Err("Could not export game state".into());
+        }
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn xfs_import_save(b: *mut Bridge, data: *const u8, length: usize) -> i32 {
+    call(b, |b| {
+        if data.is_null() || !(24..=MAX_SAVE_BYTES).contains(&length) {
+            return Err("Invalid game state size".into());
+        }
+        let gam = validate_database(Hdb::from_bytes(std::slice::from_raw_parts(data, length).to_vec()))?;
+        if xf::save::game_state_id(&gam).is_none() { return Err("Save does not contain a game state".into()); }
+        b.restart(Some(Box::new(gam)), Start::Menu);
+        Ok(())
+    })
 }
 
 #[no_mangle]
@@ -476,4 +519,3 @@ mod tests {
         assert!(CStr::from_ptr(err.as_ptr()).to_string_lossy().contains("database"));
     }}
 }
-

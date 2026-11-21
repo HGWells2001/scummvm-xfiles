@@ -6,9 +6,11 @@
 #include "common/config-manager.h"
 #include "common/error.h"
 #include "common/events.h"
+#include "common/savefile.h"
 #include "common/system.h"
 #include "common/textconsole.h"
 #include "engines/util.h"
+#include "engines/metaengine.h"
 #include "graphics/cursorman.h"
 #include "graphics/surface.h"
 #include "audio/audiostream.h"
@@ -33,11 +35,22 @@ int xfs_frame(void *,byte *,size_t);
 int xfs_mix(void *,int16 *,size_t);
 void xfs_error(const void *,char *,size_t);
 int xfs_take_notice(void *, char *, size_t);
+int xfs_can_save(const void *);
+int xfs_export_save(void *, int (*)(void *, const byte *, size_t), void *);
+int xfs_import_save(void *, const byte *, size_t);
 uint32 xfs_view(const void *);
 int xfs_cursor_shown(const void *);
 }
 namespace XFiles {
 namespace {
+constexpr uint32 kSaveMagic = MKTAG('X', 'F', 'S', '1');
+constexpr uint32 kMaxSaveBytes = 128 * 1024 * 1024;
+
+int collectSave(void *context, const byte *data, size_t length) {
+	auto &payload = *static_cast<std::vector<byte> *>(context);
+	payload.assign(data, data + length);
+	return 1;
+}
 // Set before the engine's graphics transaction recreates the SDL renderer.
 // Restore the previous hint when returning to the launcher.
 struct SoftwareVideoHint {
@@ -88,6 +101,59 @@ void defaultCursor(){
 	CursorMan.replaceCursorPalette(palette,0,2);CursorMan.showMouse(true);
 }
 }
+bool ShilohEngine::hasFeature(EngineFeature f) const {
+	return f == kSupportsSavingDuringRuntime || f == kSupportsLoadingDuringRuntime || f == kSupportsReturnToLauncher;
+}
+
+bool ShilohEngine::canSaveGameStateCurrently(Common::U32String *msg) {
+	if (xfs_can_save(_core))
+		return true;
+	if (msg)
+		*msg = Common::U32String("Attendi che la scena sia pronta per il salvataggio.");
+	return false;
+}
+
+bool ShilohEngine::canLoadGameStateCurrently(Common::U32String *) {
+	return _core != nullptr;
+}
+
+Common::Error ShilohEngine::saveGameState(int slot, const Common::String &desc, bool isAutosave) {
+	if (slot < 0 || slot > getMetaEngine()->getMaximumSaveSlot())
+		return Common::kWritingFailed;
+	std::vector<byte> payload;
+	if (xfs_export_save(_core, collectSave, &payload) != 0) {
+		char error[512] = {};
+		xfs_error(_core, error, sizeof(error));
+		return Common::Error(Common::kWritingFailed, error);
+	}
+	Common::ScopedPtr<Common::OutSaveFile> file(_saveFileMan->openForSaving(getSaveStateName(slot)));
+	if (!file)
+		return Common::kWritingFailed;
+	file->writeUint32BE(kSaveMagic);
+	file->writeUint32LE(payload.size());
+	if (file->write(payload.data(), payload.size()) != payload.size() || file->err())
+		return Common::kWritingFailed;
+	getMetaEngine()->appendExtendedSave(file.get(), getTotalPlayTime(), desc, isAutosave);
+	return file->err() ? Common::kWritingFailed : Common::kNoError;
+}
+
+Common::Error ShilohEngine::loadGameStream(Common::SeekableReadStream *stream) {
+	if (stream->readUint32BE() != kSaveMagic)
+		return Common::kReadingFailed;
+	const uint32 size = stream->readUint32LE();
+	if (size < 24 || size > kMaxSaveBytes || size > stream->size() - stream->pos())
+		return Common::kReadingFailed;
+	std::vector<byte> payload(size);
+	if (stream->read(payload.data(), size) != size || stream->err())
+		return Common::kReadingFailed;
+	if (xfs_import_save(_core, payload.data(), size) != 0) {
+		char error[512] = {};
+		xfs_error(_core, error, sizeof(error));
+		return Common::Error(Common::kReadingFailed, error);
+	}
+	return Common::kNoError;
+}
+
 void ShilohEngine::pauseEngineIntern(bool pause){
 	Engine::pauseEngineIntern(pause);
 	// A modal ScummVM pause must not advance the game's timers on resume.
@@ -103,10 +169,23 @@ Common::Error ShilohEngine::run(){
 	void *core=xfs_create(data.c_str(),saves.c_str(),boot==-1?1:boot==-3?2:0,message,sizeof(message));
 	if(!core)return Common::Error(Common::kReadingFailed,message);
 	Runtime runtime(core,_mixer);
+	_core = core;
+	struct ResetCore {
+		void *&core;
+		~ResetCore() { core = nullptr; }
+	} resetCore{_core};
 	SoftwareVideoHint videoHint;
 	initGraphics(640,480,nullptr);
 	if(_system->getScreenFormat().bytesPerPixel<2)return Common::Error(Common::kUnsupportedColorMode);
 	defaultCursor();
+	if (ConfMan.hasKey("save_slot")) {
+		const int slot = ConfMan.getInt("save_slot");
+		if (slot >= 0) {
+			const Common::Error result = loadGameState(slot);
+			if (result.getCode() != Common::kNoError)
+				return result;
+		}
+	}
 	std::vector<byte> rgb(640*480*3);
 	const Graphics::PixelFormat source(3,8,8,8,0,0,8,16,0);
 	Audio::QueuingAudioStream *audio=Audio::makeQueuingAudioStream(44100,true);
@@ -126,6 +205,11 @@ Common::Error ShilohEngine::run(){
 			case Common::EVENT_WHEELUP:kind=5;break;
 			case Common::EVENT_WHEELDOWN:kind=6;break;
 			case Common::EVENT_KEYDOWN:{
+				if (event.kbd.keycode == Common::KEYCODE_F5 && !(event.kbd.flags & Common::KBD_NON_STICKY)) {
+					if (!event.kbdRepeat)
+						openMainMenuDialog();
+					break;
+				}
 				if (event.kbdRepeat && (event.kbd.keycode == Common::KEYCODE_F1 ||
 				                        event.kbd.keycode == Common::KEYCODE_F3))
 					break;

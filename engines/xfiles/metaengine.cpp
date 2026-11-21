@@ -9,6 +9,14 @@
 class XFilesMetaEngine : public AdvancedMetaEngine<ADGameDescription> {
 public:
     const char *getName() const override { return "xfiles"; }
+    int getAutosaveSlot() const override { return -1; }
+    bool hasFeature(MetaEngineFeature f) const override {
+#ifdef USE_XFILES_SHILOH
+        return MetaEngine::hasFeature(f);
+#else
+        return false;
+#endif
+    }
     Common::Error createInstance(OSystem *syst, Engine **engine, const ADGameDescription *) const override {
 #ifdef USE_XFILES_SHILOH
         if(!ConfMan.hasKey("xfiles_research") || !ConfMan.getBool("xfiles_research")){
