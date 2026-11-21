@@ -116,7 +116,7 @@ impl Bridge {
         else if let Ok(t) = std::fs::read_to_string(self.saves.join("host-prefs.txt")) {
             if let Ok(p) = front::settings::parse_host_prefs(&t) { s.host_prefs = p; }
         }
-        if self.current != self.base { s.boot(Start::Menu); s.load_game(); }
+        if self.current != self.base { s.load_game(); }
         else { s.boot(start); }
         if let Some(captions) = captions {
             s.r.set_closed_captioning(captions);
@@ -470,6 +470,39 @@ pub unsafe extern "C" fn xfs_cursor_shown(b: *const Bridge) -> i32 {
 mod tests {
     use super::*;
     #[test]
+    fn scummvm_save_round_trip() {
+        let Ok(data) = std::env::var("XFILES_TEST_DATA") else { return; };
+        let data = std::ffi::CString::new(data).unwrap();
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let saves = std::env::temp_dir().join(format!("xfiles-native-save-{stamp}")).join("saves");
+        let save_path = std::ffi::CString::new(saves.to_str().unwrap()).unwrap();
+        let mut error = [0i8; 512];
+        unsafe extern "C" fn collect(context: *mut std::ffi::c_void, data: *const u8, size: usize) -> i32 {
+            let bytes = &mut *context.cast::<Vec<u8>>();
+            bytes.extend_from_slice(std::slice::from_raw_parts(data, size));
+            1
+        }
+        unsafe {
+            let core = xfs_create(data.as_ptr(), save_path.as_ptr(), 2, error.as_mut_ptr(), error.len());
+            assert!(!core.is_null(), "{}", CStr::from_ptr(error.as_ptr()).to_string_lossy());
+            for _ in 0..2400 {
+                assert_eq!(xfs_tick(core, 50), 0);
+                if xfs_can_save(core) != 0 { break; }
+            }
+            assert_eq!(xfs_can_save(core), 1);
+            let view = xfs_view(core);
+            let mut payload = Vec::<u8>::new();
+            assert_eq!(xfs_export_save(core, collect, (&mut payload as *mut Vec<u8>).cast()), 0);
+            assert_eq!(xfs_import_save(core, payload.as_ptr(), 12), -1);
+            assert_eq!(xfs_view(core), view);
+            assert_eq!(xfs_import_save(core, payload.as_ptr(), payload.len()), 0);
+            for _ in 0..120 { assert_eq!(xfs_tick(core, 16), 0); }
+            assert_eq!(xfs_view(core), view);
+            assert!(!(*core).session.as_ref().unwrap().r.menu_open);
+            xfs_destroy(core);
+        }
+    }
+    #[test]
     fn movie_shots_keep_scripted_targets_and_allow_shots_elsewhere() {
         use xf::world::{devices::{GUN_OWNER, VIDEO_OWNER}, moviehot::MOVIE_HOT_TAG};
         assert!(matches!(movie_shot(Some(MOVIE_HOT_TAG | 221), true), MovieShot::UseHitTest));
@@ -519,3 +552,4 @@ mod tests {
         assert!(CStr::from_ptr(err.as_ptr()).to_string_lossy().contains("database"));
     }}
 }
+

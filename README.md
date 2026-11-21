@@ -29,10 +29,9 @@ cache, il motore ripete la verifica completa; l'audio conserva anche il controll
 del contenuto quando viene riprodotto. Il primo avvio dopo questo aggiornamento
 crea l'indice. La finestra del gioco viene inizializzata al termine del caricamento,
 senza la schermata nera con "Preparazione del gioco...".
-Cache e salvataggi sono conservati fuori dalla cartella del gioco. Il percorso
-dei salvataggi segue le impostazioni di ScummVM; i tre slot del gioco restano
-nel suo menu originale. L'integrazione con il browser globale dei salvataggi di
-ScummVM non e ancora implementata.
+Premi **F5** per aprire il menu di ScummVM e usare i suoi slot. Puoi salvare
+quando la scena e stabile e caricare anche dal launcher. I salvataggi precedenti
+restano accessibili dal menu originale di The X-Files.
 
 Su Windows il motore imposta il renderer software prima di inizializzare il video.
 Il gioco usa direttamente i file completi della cartella selezionata. Il motore
@@ -60,9 +59,8 @@ media but does not execute a game. A runtime build can select it with
 `xfiles_research=true` in the game target.
 The Rust dependency is pinned to `e3dfde0d098b25135a5243839d44842ccbc5fe91`.
 Rust is pinned to 1.100.0 and the resolved crates are recorded in `bridge/Cargo.lock`.
-Save slots and preferences are kept outside game data, in the selected ScummVM
-save directory's `xfiles-shiloh` subdirectory. This prototype uses the core's
-filesystem save format; integration with ScummVM's save browser is pending.
+ScummVM slots store the Shiloh game state with standard ScummVM metadata.
+The original game's slots and preferences are in the `xfiles-shiloh` subdirectory.
 
 ## Older Windows builds and optional preparation scripts
 
