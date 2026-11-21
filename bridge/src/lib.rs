@@ -23,6 +23,18 @@ const ARREST_MOVIE: u32 = 0x4cc8;
 const DISMISSAL_MOVIE: u32 = 0x4cc6;
 const GUNSHOT_SOUND: u32 = 0x87b7;
 const ARREST_HOTSPOT: u32 = 600;
+const WAREHOUSE_WIDE: u32 = 0x5bbe;
+const WAREHOUSE_BINOCULARS: u32 = 0x11432;
+
+fn binocular_movie_position(s: &Session<'_>) -> Option<u64> {
+    if s.r.w.dev.held != Some(1) || s.r.game_paused() || s.r.frozen
+        || s.r.rewind_box || s.preview.is_some() || s.alt.msgbox.is_some()
+    {
+        return None;
+    }
+    let (asset, position) = s.picture_head()?;
+    (asset == WAREHOUSE_WIDE).then_some(position)
+}
 
 enum MovieShot {
     UseHitTest,
@@ -448,7 +460,16 @@ pub unsafe extern "C" fn xfs_key(b: *mut Bridge, code: u32, modifiers: u32) -> i
 pub unsafe extern "C" fn xfs_frame(b: *mut Bridge, out: *mut u8, length: usize) -> i32 {
     if out.is_null() || length!=PIXELS {return -1;}
     call(b,|b| {
-        let frame=b.session.as_mut().ok_or("Session unavailable")?.render();
+        let s = b.session.as_mut().ok_or("Session unavailable")?;
+        let preview = s.preview;
+        if let Some(position) = binocular_movie_position(s) {
+            if s.clip(WAREHOUSE_BINOCULARS).is_some() {
+                // The wide player still owns the scene's completion and its queued actions.
+                s.preview = Some((WAREHOUSE_BINOCULARS, s.picture_now().saturating_sub(position)));
+            }
+        }
+        let frame = s.render();
+        s.preview = preview;
         if frame.len()!=PIXELS {return Err("Unexpected framebuffer length".into());}
         std::ptr::copy_nonoverlapping(frame.as_ptr(),out,PIXELS);Ok(())
     })
@@ -459,6 +480,12 @@ pub unsafe extern "C" fn xfs_mix(b: *mut Bridge, out: *mut i16, samples: usize) 
     call(b,|b| {
         let s=b.session.as_mut().ok_or("Session unavailable")?;
         let mut cues = s.audio_cues();
+        if let Some(position) = binocular_movie_position(s) {
+            if let Some(cue) = reaction_cue(s, WAREHOUSE_BINOCULARS, position) {
+                cues.retain(|original| original.asset != WAREHOUSE_WIDE);
+                cues.push(cue);
+            }
+        }
         if let Some(start) = b.movie_shot_at {
             if !s.r.game_paused() && !s.r.started().contains(&GUNSHOT_SOUND)
                 && b.frozen_shot_at.is_none() && !cues.iter().any(|cue| cue.asset == GUNSHOT_SOUND)
@@ -548,6 +575,51 @@ mod tests {
         assert!(s.r.plays.iter().any(|play| play.1 == ending), "ending {ending:#x} never played");
         assert!(s.r.menu_open || s.r.rewind_box, "ending {ending:#x} never resolved");
         assert_eq!(unsafe { xfs_can_save(bridge) }, 0);
+    }
+
+    #[test]
+    fn warehouse_binoculars_show_closeup_and_restore_wide_movie() {
+        use xf::world::{event, Msg, Out, RegCause};
+
+        with_game(|bridge| {
+            let s = bridge.session.as_mut().unwrap();
+            s.reload_core(s.r.w.gam);
+            for action in [0x7d2d, 0x1190c] {
+                s.r.w.execute(Msg { action, trigger: 0 });
+            }
+            let tl = s.r.w.trigger_list_of(WAREHOUSE_WIDE);
+            s.r.w.out.push(Out::Reg {
+                owner: WAREHOUSE_WIDE, tl, cause: RegCause::PlayAsset { action: 0 },
+            });
+            // Register the binocular icon and use the game's own selection action.
+            let icon = 0x553d;
+            s.r.external_register(icon, s.r.w.trigger_list_of(icon).unwrap());
+            bridge.step(100).unwrap();
+            bridge.session.as_mut().unwrap().r.external_fire(WAREHOUSE_WIDE, event::ACTIVATION);
+            for _ in 0..4 { bridge.step(100).unwrap(); }
+
+            let mut wide = vec![0; PIXELS];
+            let mut closeup = vec![0; PIXELS];
+            unsafe { assert_eq!(xfs_frame(bridge, wide.as_mut_ptr(), PIXELS), 0); }
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.vars.get(0x421), Some(WAREHOUSE_WIDE as i32));
+            assert!(s.r.click(icon));
+            s.tick(0);
+            assert_eq!(s.r.w.dev.held, Some(1));
+            assert_eq!(binocular_movie_position(s), Some(400));
+            assert!(!s.r.w.dev.held_overlay);
+            assert!(reaction_cue(s, WAREHOUSE_BINOCULARS, 400).is_some());
+            unsafe { assert_eq!(xfs_frame(bridge, closeup.as_mut_ptr(), PIXELS), 0); }
+            let band_pixel = |x: usize, y: usize| ((y * 640 + x) * 3)..((y * 640 + x) * 3 + 3);
+            assert_ne!(wide[band_pixel(320, 210)], closeup[band_pixel(320, 210)]);
+
+            let s = bridge.session.as_mut().unwrap();
+            assert!(s.r.w.held_drop());
+            assert_eq!(s.r.playing(), Some(WAREHOUSE_WIDE));
+            assert!(s.preview.is_none());
+            unsafe { assert_eq!(xfs_frame(bridge, closeup.as_mut_ptr(), PIXELS), 0); }
+            assert_eq!(wide[band_pixel(320, 210)], closeup[band_pixel(320, 210)]);
+        });
     }
 
     #[test]
