@@ -97,13 +97,11 @@ Common::Error ShilohEngine::run(){
 	const Common::String saves=saveBase.join("xfiles-shiloh").toString('/');
 	char message[1024]={0};
 	const int boot=ConfMan.hasKey("boot_param")?ConfMan.getInt("boot_param"):0;
-	SoftwareVideoHint videoHint;
-	initGraphics(640,480,nullptr);
-	_system->displayMessageOnOSD(Common::U32String("Preparazione del gioco..."));
-	_system->updateScreen();
 	void *core=xfs_create(data.c_str(),saves.c_str(),boot==-1?1:boot==-3?2:0,message,sizeof(message));
 	if(!core)return Common::Error(Common::kReadingFailed,message);
 	Runtime runtime(core,_mixer);
+	SoftwareVideoHint videoHint;
+	initGraphics(640,480,nullptr);
 	if(_system->getScreenFormat().bytesPerPixel<2)return Common::Error(Common::kUnsupportedColorMode);
 	defaultCursor();
 	std::vector<byte> rgb(640*480*3);

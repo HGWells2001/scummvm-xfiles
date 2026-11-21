@@ -82,6 +82,10 @@ fn decoder()->Result<PathBuf,String>{
 pub fn audio_cache(data:&Path,saves:&Path,original:&Path)->Result<(),String>{
     let cache=state_directory(&saves.parent().ok_or("Save directory has no parent")?.join("audio-cache"),original)?;
     pcmcache::set_dir(cache.clone());
+    let index=super::audio_index::Index::open(original,&cache);
+    if let Some(count)=index.as_ref().and_then(|i|i.verified()){
+        eprintln!("XFILES native audio: fast index, {count} cached; no movie headers probed");return Ok(());
+    }
     let lib=MediaLib::new(data);
     let mut files:Vec<PathBuf>=lib.entries().map(|(_,p)|p.clone()).collect();files.sort();files.dedup();
     let mut executable=None;let mut made=0;let mut kept=0;
@@ -118,6 +122,7 @@ pub fn audio_cache(data:&Path,saves:&Path,original:&Path)->Result<(),String>{
         made+=1;
     }
     eprintln!("XFILES native audio: {made} prepared, {kept} cached");
+    if let Some(index)=index{index.commit(made+kept);}
     Ok(())
 }
 

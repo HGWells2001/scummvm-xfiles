@@ -7,6 +7,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use xf::front::{self, Session, host, intro::Start};
 use xf::hdb::Hdb;
 mod prepare;
+mod audio_index;
 pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
     let original=prepare::selected_root(selected)?;
     let data=prepare::data_root(&original)?;
@@ -120,6 +121,7 @@ fn read_database(file: &Path) -> Result<Hdb,String> {
 #[no_mangle]
 pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, start: u32, error: *mut c_char, capacity: usize) -> *mut Bridge {
     let result = catch_unwind(AssertUnwindSafe(|| -> Result<Box<Bridge>, String> {
+        let started=std::time::Instant::now();
         let original = prepare::selected_root(&path(data)?)?;
         let requested = path(saves)?;
         let saves = prepare::state_directory(&requested,&original)?;
@@ -131,10 +133,13 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         if xf::io::read_range(pictures,0,4).map_err(|e|e.to_string())?.as_slice()!=b"PFF " {
             return Err("X.PFF non contiene i dati completi del gioco. Ricopia i file dati dei CD nella cartella selezionata.".into());
         }
+        let audio_started=std::time::Instant::now();
         prepare::audio_cache(&data,&saves,&original)?;
+        let audio_ms=audio_started.elapsed().as_millis();
         let title = Box::into_raw(title); let base = Box::into_raw(base);
         let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new() });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
+        eprintln!("XFILES startup: audio={audio_ms}ms, total={}ms",started.elapsed().as_millis());
         Ok(b)
     }));
     match result {
