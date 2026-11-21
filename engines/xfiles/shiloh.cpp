@@ -32,6 +32,7 @@ int xfs_key(void *,uint32,uint32);
 int xfs_frame(void *,byte *,size_t);
 int xfs_mix(void *,int16 *,size_t);
 void xfs_error(const void *,char *,size_t);
+int xfs_take_notice(void *, char *, size_t);
 uint32 xfs_view(const void *);
 int xfs_cursor_shown(const void *);
 }
@@ -137,6 +138,8 @@ Common::Error ShilohEngine::run(){
 		if(now-_lastTick<16){_system->delayMillis(1);continue;}
 		const uint32 dt=MIN<uint32>(now-_lastTick,250);_lastTick=now;
 		result=xfs_tick(core,dt);if(result)break;
+		if (xfs_take_notice(core, message, sizeof(message)))
+			_system->displayMessageOnOSD(Common::U32String(message));
 		result=xfs_frame(core,rgb.data(),rgb.size());if(result)break;
 		Graphics::Surface raw;raw.init(640,480,640*3,rgb.data(),source);
 		Graphics::Surface *converted=raw.convertTo(_system->getScreenFormat());

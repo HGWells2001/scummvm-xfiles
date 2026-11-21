@@ -29,6 +29,7 @@ pub struct Bridge {
     mix: host::Mix,
     quit: bool,
     error: String,
+    notice: Option<String>,
 }
 
 impl Drop for Bridge {
@@ -61,28 +62,47 @@ impl Bridge {
         self.mix = host::Mix { rate: 44100, volume: 1.0, ..Default::default() };
         self.session = Some(s);
     }
+    fn load_slot(&mut self, path: &Path) -> Result<(), String> {
+        let gam = read_save_slot(&self.saves, path)?;
+        self.restart(Some(Box::new(gam)), Start::Menu);
+        Ok(())
+    }
+
     fn step(&mut self, dt: u32) -> Result<(), String> {
         let s = self.session.as_mut().ok_or("Session unavailable")?;
         s.tick(dt.min(250) as u64);
         if s.prefs_saved {
-            std::fs::write(self.saves.join("host-prefs.txt"), front::settings::host_prefs_text(&s.host_prefs)).map_err(|e| e.to_string())?;
+            if let Err(error) = std::fs::write(self.saves.join("host-prefs.txt"), front::settings::host_prefs_text(&s.host_prefs)) {
+                eprintln!("XFILES: could not write preferences: {error}");
+                self.notice = Some("Impossibile salvare le preferenze.".into());
+            }
             s.prefs_saved = false;
         }
         match host::request(s) {
             Some(host::HostReq::New) => self.restart(None, Start::NewGame),
             Some(host::HostReq::Quit) => self.quit = true,
             Some(host::HostReq::Load(path)) => {
-                let file = path.canonicalize().map_err(|e| e.to_string())?;
-                if file.parent() != Some(self.saves.as_path()) || file.extension().is_none_or(|x| !x.to_string_lossy().eq_ignore_ascii_case("x")) {
-                    return Err("Save path outside this game's save directory".into());
+                if let Err(error) = self.load_slot(&path) {
+                    eprintln!("XFILES: could not load save: {error}");
+                    self.notice = Some("Impossibile caricare il salvataggio.".into());
                 }
-                let gam = read_database(&file)?;
-                self.restart(Some(Box::new(gam)), Start::Menu);
             }
             None => {}
         }
         Ok(())
     }
+}
+
+fn read_save_slot(saves: &Path, path: &Path) -> Result<Hdb, String> {
+    let file = path.canonicalize().map_err(|e| e.to_string())?;
+    if file.parent() != Some(saves) || !file.extension().is_some_and(|x| x.eq_ignore_ascii_case("x")) {
+        return Err("Save path outside this game's save directory or invalid extension".into());
+    }
+    let gam = read_database(&file)?;
+    if xf::save::game_state_id(&gam).is_none() {
+        return Err("Save does not contain a game state".into());
+    }
+    Ok(gam)
 }
 
 unsafe fn path(p: *const c_char) -> Result<PathBuf, String> {
@@ -137,7 +157,7 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         prepare::audio_cache(&data,&saves,&original)?;
         let audio_ms=audio_started.elapsed().as_millis();
         let title = Box::into_raw(title); let base = Box::into_raw(base);
-        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new() });
+        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
         eprintln!("XFILES startup: audio={audio_ms}ms, total={}ms",started.elapsed().as_millis());
         Ok(b)
@@ -211,6 +231,13 @@ pub unsafe extern "C" fn xfs_error(b: *const Bridge, out: *mut c_char, capacity:
     if let Some(b)=b.as_ref(){copy_text(&b.error,out,capacity);}
 }
 #[no_mangle]
+pub unsafe extern "C" fn xfs_take_notice(b: *mut Bridge, out: *mut c_char, capacity: usize) -> i32 {
+    if out.is_null() || capacity == 0 { return 0; }
+    let Some(notice) = b.as_mut().and_then(|b| b.notice.take()) else { return 0; };
+    copy_text(&notice, out, capacity);
+    1
+}
+#[no_mangle]
 pub unsafe extern "C" fn xfs_view(b: *const Bridge) -> u32 {
     b.as_ref().and_then(|b|b.session.as_ref()).and_then(|s|s.r.w.view).unwrap_or(0)
 }
@@ -227,6 +254,20 @@ pub unsafe extern "C" fn xfs_cursor_shown(b: *const Bridge) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_missing_and_truncated_save_slots() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let saves = std::env::temp_dir().join(format!("xfiles-bad-save-{stamp}"));
+        std::fs::create_dir(&saves).unwrap();
+        let saves = saves.canonicalize().unwrap();
+        let slot = saves.join("TEST.x");
+        assert!(read_save_slot(&saves, &slot).is_err());
+        std::fs::write(&slot, b"partial save").unwrap();
+        assert!(matches!(read_save_slot(&saves, &slot), Err(error) if error == "Invalid database size"));
+        assert_eq!(std::fs::read(&slot).unwrap(), b"partial save");
+        std::fs::remove_file(slot).unwrap();
+        std::fs::remove_dir(saves).unwrap();
+    }
     #[test] fn null_handles_and_buffers_are_rejected() { unsafe {
         assert_eq!(xfs_tick(std::ptr::null_mut(),16),-1);
         assert_eq!(xfs_frame(std::ptr::null_mut(),std::ptr::null_mut(),PIXELS),-1);
