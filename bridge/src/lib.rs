@@ -46,11 +46,20 @@ impl Drop for Bridge {
 impl Bridge {
     fn restart(&mut self, loaded: Option<Box<Hdb>>, start: Start) {
         let prefs = self.session.as_ref().map(|s| s.host_prefs.clone());
+        let random_seed = self.session.as_ref().and_then(|s| s.r.w.live_rand).unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u32
+        });
         self.session.take();
         unsafe { if self.current != self.base { drop(Box::from_raw(self.current)); } }
         self.current = loaded.map_or(self.base, Box::into_raw);
         // SAFETY: all three Hdb allocations outlive Session. restart and Drop destroy Session first.
         let mut s = unsafe { Session::with_rules(&*self.title, &*self.current, &self.data, front::rules_hyp()) };
+        // Match Shiloh's interactive host. Timed encounters need live random draws
+        // to select their target videos and resolve their outcomes.
+        s.r.w.live_rand = Some(random_seed);
         s.game_cursor = true;
         s.set_saves(xf::save::Slots::open(&self.saves));
         if let Some(p) = prefs { s.host_prefs = p; }
@@ -296,3 +305,4 @@ mod tests {
         assert!(CStr::from_ptr(err.as_ptr()).to_string_lossy().contains("database"));
     }}
 }
+
