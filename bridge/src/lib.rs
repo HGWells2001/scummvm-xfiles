@@ -20,6 +20,7 @@ pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
 const PIXELS: usize = 640 * 480 * 3;
 const MAX_SAVE_BYTES: usize = 128 * 1024 * 1024;
 const ARREST_MOVIE: u32 = 0x4cc8;
+const DISMISSAL_MOVIE: u32 = 0x4cc6;
 const GUNSHOT_SOUND: u32 = 0x87b7;
 const ARREST_HOTSPOT: u32 = 600;
 
@@ -33,7 +34,10 @@ enum MovieShot {
 fn movie_shot(hit: Option<u32>, has_arrest: bool, has_targets: bool, location_ending: u32) -> MovieShot {
     use xf::world::devices::{GUN_OWNER, VIDEO_OWNER};
     match hit {
-        None | Some(GUN_OWNER | VIDEO_OWNER) if has_arrest => MovieShot::Arrest,
+        // In a cutscene without a shot target, the view's default can refer to
+        // firing into the room. Use the arrest for the shot into the cutscene.
+        None | Some(GUN_OWNER | VIDEO_OWNER)
+            if has_arrest || (!has_targets && location_ending == DISMISSAL_MOVIE) => MovieShot::Arrest,
         None | Some(GUN_OWNER | VIDEO_OWNER) if !has_targets && location_ending != 0 => MovieShot::Location,
         None | Some(GUN_OWNER | VIDEO_OWNER) => MovieShot::SoundOnly,
         _ => MovieShot::UseHitTest,
@@ -657,20 +661,31 @@ mod tests {
     }
 
     #[test]
-    fn location_shot_plays_the_office_ending() {
+    fn shot_in_ordinary_office_movie_plays_arrest() {
         with_game(|bridge| {
             let s = bridge.session.as_mut().unwrap();
-            s.r.w.view = None;
+            s.reload_core(s.r.w.gam);
             s.r.w.location = Some(0x12f);
             s.r.w.dev.held = Some(7);
-            assert_eq!(s.r.w.gun_view_video(), 0x4cc6);
-            let movie = 0x167f4;
+            assert_eq!(s.r.w.gun_view_video(), DISMISSAL_MOVIE);
+            let movie = 0x4d64;
             let clip = s.clip(movie).unwrap();
+            assert!(clip.ext() == "xmv" && !clip.is_still());
             assert!(s.lib.movie_hotspots(&clip.name).is_empty());
             // Exercise an ordinary cutscene with the field-office location and no scripted target.
             s.r.background = Some(movie);
             unsafe { assert_eq!(xfs_pointer(bridge, 1, 320, 200), 0); }
-            wait_for_game_over(bridge, 0x4cc6);
+            wait_for_game_over(bridge, ARREST_MOVIE);
+            let s = bridge.session.as_ref().unwrap();
+            assert!(!s.r.plays.iter().any(|play| play.1 == DISMISSAL_MOVIE));
+
+            let s = bridge.session.as_mut().unwrap();
+            s.reload_core(s.r.w.gam);
+            s.r.w.location = Some(0x12f);
+            s.r.w.dev.held = Some(7);
+            assert_eq!(s.r.hit(320, 200).map(|target| target.owner), Some(GUN_OWNER));
+            unsafe { assert_eq!(xfs_pointer(bridge, 1, 320, 200), 0); }
+            wait_for_game_over(bridge, DISMISSAL_MOVIE);
         });
     }
 
@@ -760,7 +775,9 @@ mod tests {
         use xf::world::{devices::VIDEO_OWNER, moviehot::MOVIE_HOT_TAG};
         assert!(matches!(movie_shot(Some(MOVIE_HOT_TAG | 221), true, true, 0x4cc6), MovieShot::UseHitTest));
         assert!(matches!(movie_shot(Some(VIDEO_OWNER), true, true, 0x4cc8), MovieShot::Arrest));
-        assert!(matches!(movie_shot(Some(GUN_OWNER), false, false, 0x4cc6), MovieShot::Location));
+        assert!(matches!(movie_shot(Some(GUN_OWNER), false, false, DISMISSAL_MOVIE), MovieShot::Arrest));
+        assert!(matches!(movie_shot(Some(VIDEO_OWNER), false, false, DISMISSAL_MOVIE), MovieShot::Arrest));
+        assert!(matches!(movie_shot(Some(VIDEO_OWNER), false, false, 0xa83e), MovieShot::Location));
         assert!(matches!(movie_shot(Some(GUN_OWNER), false, true, 0x4cc6), MovieShot::SoundOnly));
         assert!(matches!(movie_shot(None, false, false, 0), MovieShot::SoundOnly));
     }
