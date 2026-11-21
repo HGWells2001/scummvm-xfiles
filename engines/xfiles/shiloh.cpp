@@ -62,6 +62,7 @@ uint32 virtualKey(const Common::KeyState &key){
 	if(c>=Common::KEYCODE_KP0 && c<=Common::KEYCODE_KP9)return '0'+c-Common::KEYCODE_KP0;
 	switch(c){
 	case Common::KEYCODE_F1:return 0x70;
+	case Common::KEYCODE_F3:return 0x72;
 	case Common::KEYCODE_RETURN: case Common::KEYCODE_KP_ENTER:return 13;
 	case Common::KEYCODE_ESCAPE:return 27;
 	case Common::KEYCODE_BACKSPACE:return 8;
@@ -125,6 +126,9 @@ Common::Error ShilohEngine::run(){
 			case Common::EVENT_WHEELUP:kind=5;break;
 			case Common::EVENT_WHEELDOWN:kind=6;break;
 			case Common::EVENT_KEYDOWN:{
+				if (event.kbdRepeat && (event.kbd.keycode == Common::KEYCODE_F1 ||
+				                        event.kbd.keycode == Common::KEYCODE_F3))
+					break;
 				const uint32 key=virtualKey(event.kbd);
 				if(key)result=xfs_key(core,key,((event.kbd.flags&Common::KBD_ALT)?1:0)|((event.kbd.flags&Common::KBD_SHIFT)?2:0));
 				break;

@@ -74,6 +74,7 @@ impl Bridge {
         self.frozen_shot_at = None;
         self.restored_hotspots = movie_hotspots::RestoredHotspots::default();
         let overlay = self.session.as_ref().is_some_and(|s| s.overlay);
+        let captions = self.session.as_ref().map(|s| s.r.w.closed_captioning());
         let prefs = self.session.as_ref().map(|s| s.host_prefs.clone());
         let random_seed = self.session.as_ref().and_then(|s| s.r.w.live_rand).unwrap_or_else(|| {
             std::time::SystemTime::now()
@@ -98,6 +99,9 @@ impl Bridge {
         }
         if self.current != self.base { s.boot(Start::Menu); s.load_game(); }
         else { s.boot(start); }
+        if let Some(captions) = captions {
+            s.r.set_closed_captioning(captions);
+        }
         self.mix = host::Mix { rate: 44100, volume: 1.0, ..Default::default() };
         self.session = Some(s);
     }
@@ -296,6 +300,10 @@ pub unsafe extern "C" fn xfs_key(b: *mut Bridge, code: u32, modifiers: u32) -> i
             if matches!(host::alt(s,code,modifiers&2!=0), front::altkeys::AltOut::Exit) {b.quit=true;}
         } else if code == 0x70 {
             s.overlay = !s.overlay;
+        } else if code == 0x72 {
+            let enabled = !s.r.w.closed_captioning();
+            s.r.set_closed_captioning(enabled);
+            b.notice = Some(if enabled { "Sottotitoli attivati" } else { "Sottotitoli disattivati" }.into());
         } else {host::key(s,code);}
         Ok(())
     })
