@@ -332,6 +332,21 @@ fn read_database(file: &Path) -> Result<Hdb,String> {
     validate_database(Hdb::open(file).map_err(|e|e.to_string())?)
 }
 
+fn fix_fire_alarm_background(title: &mut Hdb) {
+    use xf::world::class::ASSET_REF;
+    let Some(blob) = title.read(ASSET_REF, 0x164a2).and_then(|asset| asset.blob("asset")) else {
+        return;
+    };
+    let expected = b"\x0229Video\x7fCUTAWAYS\x7fFire Alarm.mov\x010\x010\x010\x014\x0212XV\x7f91298.xmv\x010\x010\0";
+    if title.blob_bytes(blob) != Some(expected.as_slice()) {
+        return;
+    }
+    // An equal nonzero in/out point is a still. At 1 ms this is the first
+    // frame of the alarm, before the distinct activation clip starts at 533 ms.
+    let last_tokens = blob.mark as usize + expected.len() - 5;
+    title.d[last_tokens..last_tokens + 4].copy_from_slice(b"\x011\x011");
+}
+
 fn validate_database(h: Hdb) -> Result<Hdb, String> {
     if h.version!=0x501 || !(1..=5).contains(&h.app_version) || h.nclasses==0 || h.nclasses>4096 || h.classes.len()!=h.nclasses as usize {
         return Err("Unsupported or inconsistent NeoAccess database".into());
@@ -392,7 +407,8 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         let requested = path(saves)?;
         let saves = prepare::state_directory(&requested,&original)?;
         let data = prepare::data_root(&original)?;
-        let title = Box::new(read_database(&database(&data,"XFILES.HDB")?)?);
+        let mut title = Box::new(read_database(&database(&data,"XFILES.HDB")?)?);
+        fix_fire_alarm_background(&mut title);
         let base = Box::new(read_database(&database(&data,"XFILES.GAM")?)?);
         let media=xf::media::MediaLib::new(&data);
         let pictures=media.find("x.pff").ok_or("Manca X.PFF: copia anche i file delle cartelle MININST e MEDINST dei CD.")?;
@@ -1264,6 +1280,45 @@ mod tests {
             assert_eq!(s.r.hit(320, 200).map(|target| target.owner), Some(GUN_OWNER));
             unsafe { assert_eq!(xfs_pointer(bridge, 1, 320, 200), 0); }
             wait_for_game_over(bridge, DISMISSAL_MOVIE);
+        });
+    }
+
+    #[test]
+    fn fire_alarm_inspection_is_still_until_clicked() {
+        with_game(|bridge| {
+            const VIEW: u32 = 0x164a4;
+            const BACKGROUND: u32 = 0x164a2;
+            const ACTIVATION: u32 = 0x6f2a;
+            let gam = unsafe { &*bridge.base };
+            let mut state = xf::save::SaveState::from_gam(gam);
+            state.start = [0x1347, 0x1ac2, 0x1b32, VIEW];
+            let (bytes, _) = xf::save::build(gam, &state).unwrap();
+            unsafe { assert_eq!(xfs_import_save(bridge, bytes.as_ptr(), bytes.len()), 0); }
+            for _ in 0..8 { bridge.step(250).unwrap(); }
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.view, Some(VIEW));
+            assert_eq!(s.r.background, Some(BACKGROUND));
+            assert!(s.clip(BACKGROUND).unwrap().is_still());
+            assert!(!s.audio_cues().iter().any(|cue| cue.asset == BACKGROUND));
+            let band = VIEW_Y * SCREEN_W * 3..VIEW_BOTTOM * SCREEN_W * 3;
+            let before = s.render()[band.clone()].to_vec();
+            assert!(before.iter().any(|&pixel| pixel != 0));
+            for _ in 0..16 { bridge.step(250).unwrap(); }
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.render()[band], before);
+            assert!(!s.r.started().contains(&ACTIVATION));
+            let activation = s.clip(ACTIVATION).unwrap();
+            assert_eq!((activation.start, activation.end), (533, 4100));
+            unsafe {
+                assert_eq!(xfs_pointer(bridge, 1, 225, 210), 0);
+                assert_eq!(xfs_pointer(bridge, 2, 225, 210), 0);
+            }
+            bridge.step(0).unwrap();
+            assert!(bridge.session.as_ref().unwrap().r.started().contains(&ACTIVATION));
+            for _ in 0..32 { bridge.step(250).unwrap(); }
+            let s = bridge.session.as_ref().unwrap();
+            assert!(!s.r.started().contains(&ACTIVATION));
+            assert!(!s.r.looping().contains(&ACTIVATION));
         });
     }
 
