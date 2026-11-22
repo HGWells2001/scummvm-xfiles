@@ -2,7 +2,7 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/45012055593/artifacts/14750546362).
+[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/45013085552/artifacts/14750467440).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
 2. Usa la cartella del gioco, per esempio **D:\Giochi scumm\XFiles** oppure **D:\Giochi scumm\XFiles(Ita)**.
@@ -32,6 +32,11 @@ Premi **F5** per aprire il menu di ScummVM. Da qui puoi salvare quando la scena
 e stabile e caricare dagli slot di ScummVM. Puoi anche scegliere **Carica** dal
 launcher, dopo aver selezionato il gioco. I salvataggi precedenti restano
 accessibili dal menu originale di The X-Files.
+
+Nel computer dell'FBI, premi **Scarica** nell'album per trasferire le foto
+dalla macchina fotografica. ScummVM esporta ogni nuovo scatto anche come
+file BMP, nella sottocartella **xfiles-shiloh/foto** del percorso dei
+salvataggi. La cartella viene creata al primo trasferimento.
 
 Su Windows il motore imposta il renderer software prima di inizializzare il video.
 Il gioco usa direttamente i file completi della cartella selezionata. Il motore
