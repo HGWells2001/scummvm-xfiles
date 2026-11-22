@@ -1394,13 +1394,20 @@ mod tests {
                 }
                 bridge.step(0).unwrap();
             };
+            let click_item = |bridge: &mut Bridge, id| {
+                let s = bridge.session.as_ref().unwrap();
+                let target = s.r.clickables().into_iter().find(|target| target.owner == id)
+                    .unwrap_or_else(|| panic!("videotape control {id:#x} is unavailable"));
+                let [left, top, right, bottom] = target.rect.map(i32::from);
+                click(bridge, (left + right) / 2, (top + bottom) / 2);
+            };
             bridge.step(0).unwrap();
             click(bridge, 240, 260); // Play the tape at the desk.
             advance(bridge, "capture screen", &|b| layout(b, CAPTURE));
-            click(bridge, 180, 109);
-            assert!(layout(bridge, SEARCH));
-            click(bridge, 338, 388); // Government / Military
-            click(bridge, 555, 440); // Search
+            click_item(bridge, 0xcbd8); // Open the identification database.
+            advance(bridge, "identification database", &|b| layout(b, SEARCH));
+            click_item(bridge, 0x100d6); // Government / Military
+            click_item(bridge, 0x1010f); // Search
             advance(bridge, "matching result", &|b| b.session.as_ref().unwrap().r.background == Some(IDENTIFIED_BACKGROUND));
             let s = bridge.session.as_mut().unwrap();
             assert!(s.clip(IDENTIFIED_BACKGROUND).unwrap().is_still());
@@ -1411,7 +1418,7 @@ mod tests {
             }
             assert!(layout(bridge, SEARCH));
 
-            click(bridge, 60, 250); // Exit the computer.
+            click_item(bridge, 0x12812); // Exit the computer.
             advance(bridge, "first follow-up movie", &|b| video(b) == Some(IDENTIFIED_MOVIE));
             assert!(!layout(bridge, SEARCH));
             let mut first = vec![0; PIXELS];
@@ -1423,7 +1430,7 @@ mod tests {
             assert_ne!(first[band.clone()], later[band]);
 
             advance(bridge, "continue prompt", &|b| layout(b, CONTINUE));
-            click(bridge, 320, 240);
+            click_item(bridge, 0xcc26);
             advance(bridge, "second follow-up movie", &|b| video(b) == Some(NEXT_MOVIE));
             let s = bridge.session.as_mut().unwrap();
             assert_eq!(s.r.background, Some(NEXT_BACKGROUND));

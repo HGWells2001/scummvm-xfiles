@@ -55,15 +55,16 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          update: true
-          install: >-
-            git
-            make
-            python
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-SDL2
-            mingw-w64-x86_64-freetype
-            mingw-w64-x86_64-pkgconf
+      - name: Update MSYS2 from the primary package server
+        run: |
+          sed -i 's@https://mirror\.msys2\.org/@https://repo.msys2.org/@g' /etc/pacman.d/mirrorlist.*
+          pacman --noconfirm -Syu
+      - name: Install Windows build dependencies
+        run: |
+          pacman --noconfirm -Su
+          pacman --noconfirm --needed -S git make python \
+            mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2 \
+            mingw-w64-x86_64-freetype mingw-w64-x86_64-pkgconf
       - name: Build pinned in-process runtime without SDL frontend
         run: |
           export PATH="$(cygpath -u "$USERPROFILE")/.cargo/bin:$PATH"
