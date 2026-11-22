@@ -334,19 +334,27 @@ fn read_database(file: &Path) -> Result<Hdb,String> {
     validate_database(Hdb::open(file).map_err(|e|e.to_string())?)
 }
 
-fn fix_fire_alarm_background(title: &mut Hdb) {
+fn hold_first_frame(title: &mut Hdb, id: u32, expected: &[u8]) {
     use xf::world::class::ASSET_REF;
-    let Some(blob) = title.read(ASSET_REF, 0x164a2).and_then(|asset| asset.blob("asset")) else {
+    let Some(blob) = title.read(ASSET_REF, id).and_then(|asset| asset.blob("asset")) else {
         return;
     };
-    let expected = b"\x0229Video\x7fCUTAWAYS\x7fFire Alarm.mov\x010\x010\x010\x014\x0212XV\x7f91298.xmv\x010\x010\0";
-    if title.blob_bytes(blob) != Some(expected.as_slice()) {
+    if title.blob_bytes(blob) != Some(expected) {
         return;
     }
-    // An equal nonzero in/out point is a still. At 1 ms this is the first
-    // frame of the alarm, before the distinct activation clip starts at 533 ms.
+    // An equal nonzero in/out point makes this reference a still at 1 ms.
     let last_tokens = blob.mark as usize + expected.len() - 5;
     title.d[last_tokens..last_tokens + 4].copy_from_slice(b"\x011\x011");
+}
+
+fn fix_still_backgrounds(title: &mut Hdb) {
+    hold_first_frame(title, 0x164a2, b"\x0229Video\x7fCUTAWAYS\x7fFire Alarm.mov\x010\x010\x010\x014\x0212XV\x7f91298.xmv\x010\x010\0");
+
+    // Rauch's identification and the following prompt switch the office
+    // background before separate movie players take over. The background
+    // aliases must hold the first frame while the computer or prompt is open.
+    hold_first_frame(title, 0x16d20, b"\x0242Video\x7fNode 7\x7fField Office\x7fsc104_105_1F.mov\x010\x010\x010\x016\x0212XV\x7f93472.xmv\x010\x010\0");
+    hold_first_frame(title, 0x16d23, b"\x0242Video\x7fNode 7\x7fField Office\x7fsc104_105_2A.mov\x010\x010\x010\x016\x0212XV\x7f93475.xmv\x010\x010\0");
 }
 
 fn validate_database(h: Hdb) -> Result<Hdb, String> {
@@ -410,7 +418,7 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         let saves = prepare::state_directory(&requested,&original)?;
         let data = prepare::data_root(&original)?;
         let mut title = Box::new(read_database(&database(&data,"XFILES.HDB")?)?);
-        fix_fire_alarm_background(&mut title);
+        fix_still_backgrounds(&mut title);
         let base = Box::new(read_database(&database(&data,"XFILES.GAM")?)?);
         let media=xf::media::MediaLib::new(&data);
         let pictures=media.find("x.pff").ok_or("Manca X.PFF: copia anche i file delle cartelle MININST e MEDINST dei CD.")?;
@@ -1340,6 +1348,91 @@ mod tests {
             bridge.hospital_audio.mix_dialogue(s, &mut cues);
             let mixed = cues.iter().find(|cue| cue.asset == asset).unwrap();
             assert_eq!(mixed.pcm.samples != original.samples, split);
+        });
+    }
+
+    #[test]
+    fn videotape_identification_waits_for_the_computer_to_close() {
+        use xf::world::class;
+        const DESK: u32 = 0x4d5;
+        const CAPTURE: u32 = 0xcbbe;
+        const SEARCH: u32 = 0xf160;
+        const IDENTIFIED_BACKGROUND: u32 = 0x16d20;
+        const IDENTIFIED_MOVIE: u32 = 0x534e;
+        const NEXT_BACKGROUND: u32 = 0x16d23;
+        const NEXT_MOVIE: u32 = 0x5350;
+        const CONTINUE: u32 = 0xcc12;
+        with_game(|bridge| {
+            let title = unsafe { &*bridge.title };
+            let gam = unsafe { &*bridge.base };
+            let viewpoint = title.class(class::VIEWPOINT).unwrap().objects.iter().find(|&&(id, _)| {
+                title.list_of(class::VIEWPOINT, id).contains(&DESK)
+            }).unwrap().0;
+            let mut state = xf::save::SaveState::from_gam(gam);
+            state.start = [0x12d, 0x12f, viewpoint, DESK];
+            // The case files have already been cleared from the desk on this visit.
+            for (key, enabled) in &mut state.enabled {
+                if *key == (class::ASSET_REF, 0x9884) { *enabled = 0; }
+                if *key == (class::EXPLORABLE, 0x1586d) { *enabled = 1; }
+            }
+            let (bytes, _) = xf::save::build(gam, &state).unwrap();
+            unsafe { assert_eq!(xfs_import_save(bridge, bytes.as_ptr(), bytes.len()), 0); }
+            let video = |bridge: &Bridge| bridge.session.as_ref().unwrap().r.video_playing();
+            let layout = |bridge: &Bridge, id| bridge.session.as_ref().unwrap().r.w.layouts().iter().any(|l| l.0 == id);
+            let advance = |bridge: &mut Bridge, stage, condition: &dyn Fn(&Bridge) -> bool| {
+                for _ in 0..240 {
+                    if condition(bridge) { return; }
+                    bridge.step(250).unwrap();
+                }
+                let s = bridge.session.as_ref().unwrap();
+                panic!("timed out at {stage}, view {:x?}, background {:x?}, video {:x?}", s.r.w.view, s.r.background, video(bridge));
+            };
+            let click = |bridge: &mut Bridge, x, y| {
+                unsafe {
+                    assert_eq!(xfs_pointer(bridge, 1, x, y), 0);
+                    assert_eq!(xfs_pointer(bridge, 2, x, y), 0);
+                }
+                bridge.step(0).unwrap();
+            };
+            bridge.step(0).unwrap();
+            click(bridge, 240, 260); // Play the tape at the desk.
+            advance(bridge, "capture screen", &|b| layout(b, CAPTURE));
+            click(bridge, 180, 109);
+            assert!(layout(bridge, SEARCH));
+            click(bridge, 338, 388); // Government / Military
+            click(bridge, 555, 440); // Search
+            advance(bridge, "matching result", &|b| b.session.as_ref().unwrap().r.background == Some(IDENTIFIED_BACKGROUND));
+            let s = bridge.session.as_mut().unwrap();
+            assert!(s.clip(IDENTIFIED_BACKGROUND).unwrap().is_still());
+            for _ in 0..24 {
+                bridge.step(250).unwrap();
+                let s = bridge.session.as_mut().unwrap();
+                assert!(!s.audio_cues().iter().any(|cue| matches!(cue.asset, IDENTIFIED_BACKGROUND | IDENTIFIED_MOVIE)));
+            }
+            assert!(layout(bridge, SEARCH));
+
+            click(bridge, 60, 250); // Exit the computer.
+            advance(bridge, "first follow-up movie", &|b| video(b) == Some(IDENTIFIED_MOVIE));
+            assert!(!layout(bridge, SEARCH));
+            let mut first = vec![0; PIXELS];
+            let mut later = vec![0; PIXELS];
+            unsafe { assert_eq!(xfs_frame(bridge, first.as_mut_ptr(), PIXELS), 0); }
+            for _ in 0..8 { bridge.step(250).unwrap(); }
+            unsafe { assert_eq!(xfs_frame(bridge, later.as_mut_ptr(), PIXELS), 0); }
+            let band = VIEW_Y * SCREEN_W * 3..VIEW_BOTTOM * SCREEN_W * 3;
+            assert_ne!(first[band.clone()], later[band]);
+
+            advance(bridge, "continue prompt", &|b| layout(b, CONTINUE));
+            click(bridge, 320, 240);
+            advance(bridge, "second follow-up movie", &|b| video(b) == Some(NEXT_MOVIE));
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.background, Some(NEXT_BACKGROUND));
+            assert!(s.clip(NEXT_BACKGROUND).unwrap().is_still());
+            let cues = s.audio_cues();
+            assert!(cues.iter().any(|cue| cue.asset == NEXT_MOVIE));
+            assert!(!cues.iter().any(|cue| cue.asset == NEXT_BACKGROUND));
+            advance(bridge, "return to the office", &|b| video(b).is_none());
+            assert!(!layout(bridge, CONTINUE));
         });
     }
 
