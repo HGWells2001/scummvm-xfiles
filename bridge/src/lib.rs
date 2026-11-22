@@ -526,11 +526,11 @@ fn scroll_computer_page(s: &mut Session<'_>, key: u32) -> bool {
 
 fn navigate_with_key(s: &mut Session<'_>, key: u32, repeat: bool) -> bool {
     use xf::world::class::NAV;
-    let kinds: &[u32] = match key {
-        0x41 | 0x25 => &[0x11c], // Left
-        0x44 | 0x27 => &[0x11d], // Right
-        0x57 | 0x26 => &[0x11e, 0x120], // Forward or up
-        0x53 | 0x28 => &[0x11f, 0x117a], // Back out or down
+    let kind = match key {
+        0x41 | 0x25 => 0x11c, // Left
+        0x44 | 0x27 => 0x11d, // Right
+        0x57 | 0x26 => 0x11e, // Forward
+        0x53 | 0x28 => 0x11f, // Back out
         _ => return false,
     };
     if !s.r.game_running || s.r.w.view.is_none() || s.intro_playing()
@@ -541,31 +541,29 @@ fn navigate_with_key(s: &mut Session<'_>, key: u32, repeat: bool) -> bool {
         return false;
     }
     let items = s.r.clickables();
-    for kind in kinds {
-        let target = items.iter().filter(|item| item.cls == NAV && item.kind == *kind)
-            .filter(|item| {
-                let [left, top, right, bottom] = item.rect.map(i32::from);
-                let (left, right) = (left.max(0), right.min(SCREEN_W as i32));
-                let (top, bottom) = (top.max(VIEW_Y as i32), bottom.min(VIEW_BOTTOM as i32));
-                if left >= right || top >= bottom {
-                    return false;
-                }
-                // Use the same hit priority as the mouse, including overlapping controls.
-                [(left + right) / 2, left, right - 1].into_iter().any(|x| {
-                    [(top + bottom) / 2, top, bottom - 1].into_iter().any(|y| {
-                        s.r.hit_in(&items, x, y).is_some_and(|hit| hit.owner == item.owner)
-                    })
-                })
-            }).min_by_key(|item| {
-                let [left, _, right, _] = item.rect.map(i32::from);
-                (left + right - SCREEN_W as i32).abs()
-            });
-        if let Some(target) = target {
-            if !repeat {
-                s.r.click_clickable(target);
+    let target = items.iter().filter(|item| item.cls == NAV && item.kind == kind)
+        .filter(|item| {
+            let [left, top, right, bottom] = item.rect.map(i32::from);
+            let (left, right) = (left.max(0), right.min(SCREEN_W as i32));
+            let (top, bottom) = (top.max(VIEW_Y as i32), bottom.min(VIEW_BOTTOM as i32));
+            if left >= right || top >= bottom {
+                return false;
             }
-            return true;
+            // Use the same hit priority as the mouse, including overlapping controls.
+            [(left + right) / 2, left, right - 1].into_iter().any(|x| {
+                [(top + bottom) / 2, top, bottom - 1].into_iter().any(|y| {
+                    s.r.hit_in(&items, x, y).is_some_and(|hit| hit.owner == item.owner)
+                })
+            })
+        }).min_by_key(|item| {
+            let [left, _, right, _] = item.rect.map(i32::from);
+            (left + right - SCREEN_W as i32).abs()
+        });
+    if let Some(target) = target {
+        if !repeat {
+            s.r.click_clickable(target);
         }
+        return true;
     }
     false
 }
@@ -885,13 +883,13 @@ mod tests {
         use xf::world::class::NAV;
 
         with_game(|bridge| {
-            for (nav, letter, arrow) in [
-                (0x2ba, b'A', 0x25),
-                (0x2b9, b'D', 0x27),
-                (0x4f0, b'W', 0x26),
-                (0x1c5a, b'S', 0x28),
-                (0x1186, b'W', 0x26),
-                (0x1181, b'S', 0x28),
+            for (nav, letter, arrow, keyboard) in [
+                (0x2ba, b'A', 0x25, true),
+                (0x2b9, b'D', 0x27, true),
+                (0x4f0, b'W', 0x26, true),
+                (0x1c5a, b'S', 0x28, true),
+                (0x1186, b'W', 0x26, false), // Look up.
+                (0x1181, b'S', 0x28, false), // Look down.
             ] {
                 for key in [u32::from(letter), arrow] {
                     let s = bridge.session.as_mut().unwrap();
@@ -908,6 +906,14 @@ mod tests {
                     unsafe { assert_eq!(xfs_key(bridge, key, 4), 0); }
                     assert_eq!(bridge.session.as_ref().unwrap().r.transitions.len(), before);
                     unsafe { assert_eq!(xfs_key(bridge, key, 0), 0); }
+                    if !keyboard {
+                        let s = bridge.session.as_ref().unwrap();
+                        assert_eq!(s.r.transitions.len(), before);
+                        let spot = s.r.clickables().into_iter().find(|item| item.owner == nav).unwrap();
+                        let [l, t, r, b] = spot.rect.map(i32::from);
+                        unsafe { assert_eq!(xfs_pointer(bridge, 1, (l + r) / 2, (t + b) / 2), 0); }
+                        bridge.step(0).unwrap();
+                    }
                     assert_eq!(bridge.session.as_ref().unwrap().r.transitions.last().map(|entry| entry.0),
                         Some(dest), "navigation {nav:#x} for key {key:#x}");
                 }

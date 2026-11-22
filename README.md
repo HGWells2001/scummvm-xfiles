@@ -10,9 +10,9 @@
 4. Conferma e premi **Gioca**.
 
 Per cambiare inquadratura usa **W/A/S/D** o le **frecce**. Sinistra e destra
-ruotano l'inquadratura, su avanza o guarda in alto, giù torna indietro o
-guarda in basso, dove la scena offre la relativa uscita. Fai una pressione
-per ogni cambio di scena.
+ruotano l'inquadratura, su avanza e giù torna indietro, dove la scena offre
+la relativa uscita. Usa il mouse per guardare in alto o in basso. Fai una
+pressione per ogni cambio di scena.
 
 Seleziona il **binocolo** dall'inventario e punta sulla scena per ingrandirla.
 Lo zoom 2× funziona sulle immagini fisse e durante i filmati di gioco. Le scene
