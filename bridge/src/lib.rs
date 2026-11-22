@@ -9,6 +9,7 @@ use xf::hdb::Hdb;
 use xf::media::{FRAME_H, FRAME_W, pict::Picture};
 mod prepare;
 mod audio_index;
+mod camera;
 mod movie_hotspots;
 pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
     let original=prepare::selected_root(selected)?;
@@ -151,6 +152,7 @@ pub struct Bridge {
     arrest_movie: Option<ArrestMovie>,
     frozen_shot_at: Option<u64>,
     movie_shot_at: Option<u64>,
+    camera: camera::Camera,
     restored_hotspots: movie_hotspots::RestoredHotspots,
 }
 
@@ -170,6 +172,7 @@ impl Bridge {
         self.arrest_movie = None;
         self.frozen_shot_at = None;
         self.movie_shot_at = None;
+        self.camera = camera::Camera::default();
         self.restored_hotspots = movie_hotspots::RestoredHotspots::default();
         let overlay = self.session.as_ref().is_some_and(|s| s.overlay);
         let captions = self.session.as_ref().map(|s| s.r.w.closed_captioning());
@@ -217,7 +220,12 @@ impl Bridge {
         let previous_plays = s.r.plays.len();
         let previous_log = s.r.log.len();
         let previous_media = s.r.media_log.len();
+        let previous_exposures = s.r.w.pc.camera;
         s.tick(dt.min(250) as u64);
+        if s.r.w.pc.camera > previous_exposures {
+            self.camera.play_shutter(&mut self.mix, camera::SHUTTER, s.now);
+        }
+        self.camera.update_background(s);
         let shown = s.preview.is_none().then(|| s.picture_head()).flatten();
         self.restored_hotspots.update(
             &mut s.r.movie_hotspots, shown, s.now,
@@ -390,7 +398,7 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         prepare::audio_cache(&data,&saves,&original)?;
         let audio_ms=audio_started.elapsed().as_millis();
         let title = Box::into_raw(title); let base = Box::into_raw(base);
-        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None,movie_shot_at:None,restored_hotspots:Default::default() });
+        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None,movie_shot_at:None,camera:Default::default(),restored_hotspots:Default::default() });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
         eprintln!("XFILES startup: audio={audio_ms}ms, total={}ms",started.elapsed().as_millis());
         Ok(b)
@@ -469,7 +477,13 @@ pub unsafe extern "C" fn xfs_pointer(b: *mut Bridge, kind: u32, x: i32, y: i32) 
                             s.r.w.view, s.r.w.inventory_value());
                     }
                 }
-                host::button(s,host::Button::Left,point);
+                if !point.is_some_and(|point| b.camera.press(s, &mut b.mix, point)) {
+                    let previous_exposures = s.r.w.pc.camera;
+                    host::button(s,host::Button::Left,point);
+                    if s.r.w.pc.camera > previous_exposures {
+                        b.camera.play_shutter(&mut b.mix, camera::SHUTTER, s.now);
+                    }
+                }
             },
             2 => {host::release(s,host::Button::Left,point);},
             3 => {host::button(s,host::Button::Right,point);},
@@ -537,6 +551,11 @@ pub unsafe extern "C" fn xfs_mix(b: *mut Bridge, out: *mut i16, samples: usize) 
     call(b,|b| {
         let s=b.session.as_mut().ok_or("Session unavailable")?;
         let mut cues = s.audio_cues();
+        if let Some(cue) = b.camera.audio(s) {
+            if !cues.iter().any(|original| original.asset == cue.asset) {
+                cues.push(cue);
+            }
+        }
         if let Some(position) = binocular_movie_position(s) {
             if let Some(cue) = reaction_cue(s, WAREHOUSE_BINOCULARS, position) {
                 cues.retain(|original| original.asset != WAREHOUSE_WIDE);
@@ -759,6 +778,80 @@ mod tests {
                 assert_ne!(actual[band.clone()], plain[band.clone()]);
                 assert_eq!(actual[band.clone()], expected[band]);
             }
+        });
+    }
+
+    #[test]
+    fn camera_photographs_still_and_movie_and_uses_the_album() {
+        use xf::world::{Msg, Out, RegCause};
+        use xf::front::light::{CAMERA_EXPOSURES, HELD_CAMERA};
+
+        with_game(|bridge| {
+            let still = 0x1ec7;
+            let movie = 0x4d64;
+            let s = bridge.session.as_mut().unwrap();
+            s.reload_core(s.r.w.gam);
+            s.r.background = Some(still);
+            bridge.step(100).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            s.r.w.dev.held = Some(HELD_CAMERA);
+            s.r.w.dev.held_overlay = true;
+            let click = |bridge: &mut Bridge, x, y| unsafe {
+                assert_eq!(xfs_pointer(bridge, 0, x, y), 0);
+                assert_eq!(xfs_pointer(bridge, 1, x, y), 0);
+                assert_eq!(xfs_pointer(bridge, 2, x, y), 0);
+            };
+            click(bridge, 160, 210);
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.pc.photos, [(still, false)]);
+            assert_eq!(s.r.w.pc.camera, 1);
+            let still_frame = s.r.w.pc.photo_frames[0];
+            assert!(s.photo_picture(still, still_frame).is_some());
+            assert!(bridge.camera.audio(s).is_some_and(|cue| cue.asset == camera::SHUTTER),
+                "shutter audio missing: {:?}", s.clip(camera::SHUTTER));
+
+            let tl = s.r.w.trigger_list_of(movie);
+            s.r.w.out.push(Out::Reg { owner: movie, tl, cause: RegCause::PlayAsset { action: 0 } });
+            s.r.external_register(0, 0);
+            bridge.step(100).unwrap();
+            bridge.step(200).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            let (asset, position) = s.picture_head().unwrap();
+            assert_eq!(asset, movie);
+            assert!(position > 0);
+            click(bridge, 619, 210);
+            let s = bridge.session.as_mut().unwrap();
+            let frame = Some(((position * 600 / 1000) as u32, [280, 0, 600, 240]));
+            assert_eq!(s.r.w.pc.photos, [(still, false), (movie, false)]);
+            assert_eq!(s.r.w.pc.photo_frames[1], frame);
+            let photo = s.photo_picture(movie, frame).unwrap();
+            assert_eq!((photo.width, photo.height), (320, 240));
+
+            s.r.w.pc.camera = CAMERA_EXPOSURES;
+            click(bridge, 320, 210);
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.pc.photos.len(), 2);
+            assert_eq!(s.r.w.pc.camera, CAMERA_EXPOSURES);
+            assert!(bridge.camera.audio(s).is_some_and(|cue| cue.asset == camera::EMPTY_SHUTTER),
+                "empty shutter audio missing: {:?}", s.clip(camera::EMPTY_SHUTTER));
+            for action in [0x15808, 0xd03d, 0xd052] {
+                s.r.w.execute(Msg { action, trigger: 0 });
+            }
+            assert_eq!(s.r.w.pc.photos, [(still, true), (movie, true)]);
+            assert_eq!(s.r.w.pc.camera, 0);
+            assert_eq!(s.r.w.pc.enlarged, Some(0));
+            // The sedan's license plate is an authored evidence photo, not a generic movie crop.
+            s.r.w.execute(Msg { action: 0x1372c, trigger: 0 });
+            assert_eq!(s.r.w.pc.photos[2], (0x1372e, false));
+            assert_eq!(s.r.w.pc.photo_frames[2], None);
+            assert!(s.photo_picture(0x1372e, None).is_some());
+            let (saved, _) = s.save_bytes().unwrap();
+            unsafe { assert_eq!(xfs_import_save(bridge, saved.as_ptr(), saved.len()), 0); }
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.pc.photos, [(still, true), (movie, true), (0x1372e, false)]);
+            assert_eq!(s.r.w.pc.photo_frames[1], frame);
+            assert_eq!(s.r.w.pc.camera, 1);
+            assert_eq!(s.photo_picture(movie, frame).unwrap().rgb, photo.rgb);
         });
     }
 
