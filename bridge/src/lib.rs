@@ -9,6 +9,7 @@ use xf::hdb::Hdb;
 use xf::media::{FRAME_H, FRAME_W, pict::Picture};
 mod prepare;
 mod audio_index;
+mod hospital_audio;
 mod camera;
 mod movie_hotspots;
 mod photo_export;
@@ -147,6 +148,7 @@ pub struct Bridge {
     data: PathBuf,
     saves: PathBuf,
     mix: host::Mix,
+    hospital_audio: hospital_audio::HospitalAudio,
     quit: bool,
     error: String,
     notice: Option<String>,
@@ -419,7 +421,7 @@ pub unsafe extern "C" fn xfs_create(data: *const c_char, saves: *const c_char, s
         prepare::audio_cache(&data,&saves,&original)?;
         let audio_ms=audio_started.elapsed().as_millis();
         let title = Box::into_raw(title); let base = Box::into_raw(base);
-        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None,movie_shot_at:None,camera:Default::default(),restored_hotspots:Default::default() });
+        let mut b = Box::new(Bridge { session:None,title,base,current:base,data,saves,mix:Default::default(),hospital_audio:Default::default(),quit:false,error:String::new(),notice:None,arrest_movie:None,frozen_shot_at:None,movie_shot_at:None,camera:Default::default(),restored_hotspots:Default::default() });
         b.restart(None, match start { 1 => Start::Menu, 2 => Start::NewGame, _ => Start::Intro });
         eprintln!("XFILES startup: audio={audio_ms}ms, total={}ms",started.elapsed().as_millis());
         Ok(b)
@@ -664,6 +666,7 @@ pub unsafe extern "C" fn xfs_mix(b: *mut Bridge, out: *mut i16, samples: usize) 
     call(b,|b| {
         let s=b.session.as_mut().ok_or("Session unavailable")?;
         let mut cues = s.audio_cues();
+        b.hospital_audio.mix_dialogue(s, &mut cues);
         if let Some(cue) = b.camera.audio(s) {
             if !cues.iter().any(|original| original.asset == cue.asset) {
                 cues.push(cue);
@@ -1280,6 +1283,63 @@ mod tests {
             assert_eq!(s.r.hit(320, 200).map(|target| target.owner), Some(GUN_OWNER));
             unsafe { assert_eq!(xfs_pointer(bridge, 1, 320, 200), 0); }
             wait_for_game_over(bridge, DISMISSAL_MOVIE);
+        });
+    }
+
+    #[test]
+    fn hospital_discovery_mixes_the_separate_dialogue_track() {
+        with_game(|bridge| {
+            use xf::{media::qt::{Handler, Movie}, world::event};
+            let asset = hospital_audio::SCULLY_DISCOVERY;
+            let view = 0x5d1a;
+            let s = bridge.session.as_mut().unwrap();
+            s.reload_core(s.r.w.gam);
+            let clip = s.clip(asset).unwrap();
+            let movie = Movie::open_header(&clip.file).unwrap();
+            let split = movie.tracks.iter().filter(|t| t.enabled && t.handler == Handler::Sound).count() == 2;
+            s.r.external_register(view, s.r.w.trigger_list_of(view).unwrap());
+            s.r.external_fire(view, event::ACTIVATION);
+            bridge.step(0).unwrap();
+            assert_eq!(bridge.session.as_ref().unwrap().r.playing(), Some(asset));
+            for _ in 0..10 { bridge.step(250).unwrap(); }
+
+            let primary = bridge.session.as_mut().unwrap().audio_cues();
+            let cue = primary.iter().find(|cue| cue.asset == asset).unwrap();
+            let from = cue.pos * usize::from(cue.pcm.channels);
+            if split {
+                assert!(cue.pcm.samples[from..from + 1024].iter().all(|&sample| sample == 0));
+            }
+            let mut baseline = host::Mix { rate: bridge.mix.rate, volume: host::volume(bridge.session.as_ref().unwrap()), ..Default::default() };
+            baseline.sync(&primary);
+            let mut original = [0; 1024];
+            baseline.fill(&mut original);
+            let mut output = [0; 1024];
+            unsafe { assert_eq!(xfs_mix(bridge, output.as_mut_ptr(), output.len()), 0); }
+            assert_eq!(output != original, split);
+
+            for _ in 0..21 { bridge.step(250).unwrap(); }
+            let s = bridge.session.as_mut().unwrap();
+            let mut cues = s.audio_cues();
+            assert_eq!(cues.iter().any(|cue| cue.asset == asset), !split);
+            bridge.hospital_audio.mix_dialogue(s, &mut cues);
+            let tail = cues.iter().find(|cue| cue.asset == asset).unwrap();
+            let from = tail.pos * usize::from(tail.pcm.channels);
+            let until = (from + 4096).min(tail.pcm.samples.len());
+            assert!(tail.pcm.samples[from..until].iter().any(|&sample| sample != 0));
+
+            let asset = hospital_audio::SCULLY_REPLY;
+            let view = 0x1209d;
+            s.reload_core(s.r.w.gam);
+            s.r.external_register(view, s.r.w.trigger_list_of(view).unwrap());
+            s.r.external_fire(view, event::ACTIVATION);
+            bridge.step(0).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.playing(), Some(asset));
+            let mut cues = s.audio_cues();
+            let original = s.sound(asset).unwrap();
+            bridge.hospital_audio.mix_dialogue(s, &mut cues);
+            let mixed = cues.iter().find(|cue| cue.asset == asset).unwrap();
+            assert_eq!(mixed.pcm.samples != original.samples, split);
         });
     }
 
