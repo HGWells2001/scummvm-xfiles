@@ -216,7 +216,7 @@ Common::Error ShilohEngine::run(){
 				                        event.kbd.keycode == Common::KEYCODE_F3))
 					break;
 				const uint32 key=virtualKey(event.kbd);
-				if(key)result=xfs_key(core,key,((event.kbd.flags&Common::KBD_ALT)?1:0)|((event.kbd.flags&Common::KBD_SHIFT)?2:0));
+				if(key)result=xfs_key(core,key,((event.kbd.flags&Common::KBD_ALT)?1:0)|((event.kbd.flags&Common::KBD_SHIFT)?2:0)|(event.kbdRepeat?4:0));
 				break;
 			}
 			default:break;

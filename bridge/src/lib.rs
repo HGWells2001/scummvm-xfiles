@@ -524,6 +524,52 @@ fn scroll_computer_page(s: &mut Session<'_>, key: u32) -> bool {
     true
 }
 
+fn navigate_with_key(s: &mut Session<'_>, key: u32, repeat: bool) -> bool {
+    use xf::world::class::NAV;
+    let kinds: &[u32] = match key {
+        0x41 | 0x25 => &[0x11c], // Left
+        0x44 | 0x27 => &[0x11d], // Right
+        0x57 | 0x26 => &[0x11e, 0x120], // Forward or up
+        0x53 | 0x28 => &[0x11f, 0x117a], // Back out or down
+        _ => return false,
+    };
+    if !s.r.game_running || s.r.w.view.is_none() || s.intro_playing()
+        || s.r.game_paused() || s.r.frozen || s.r.rewind_box || s.alt.paused
+        || s.alt.msgbox.is_some() || s.preview.is_some() || s.r.video_playing().is_some()
+        || s.r.w.dev.focus.is_some_and(|item| s.r.active.contains(&item))
+    {
+        return false;
+    }
+    let items = s.r.clickables();
+    for kind in kinds {
+        let target = items.iter().filter(|item| item.cls == NAV && item.kind == *kind)
+            .filter(|item| {
+                let [left, top, right, bottom] = item.rect.map(i32::from);
+                let (left, right) = (left.max(0), right.min(SCREEN_W as i32));
+                let (top, bottom) = (top.max(VIEW_Y as i32), bottom.min(VIEW_BOTTOM as i32));
+                if left >= right || top >= bottom {
+                    return false;
+                }
+                // Use the same hit priority as the mouse, including overlapping controls.
+                [(left + right) / 2, left, right - 1].into_iter().any(|x| {
+                    [(top + bottom) / 2, top, bottom - 1].into_iter().any(|y| {
+                        s.r.hit_in(&items, x, y).is_some_and(|hit| hit.owner == item.owner)
+                    })
+                })
+            }).min_by_key(|item| {
+                let [left, _, right, _] = item.rect.map(i32::from);
+                (left + right - SCREEN_W as i32).abs()
+            });
+        if let Some(target) = target {
+            if !repeat {
+                s.r.click_clickable(target);
+            }
+            return true;
+        }
+    }
+    false
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn xfs_key(b: *mut Bridge, code: u32, modifiers: u32) -> i32 {
     call(b,|b| {
@@ -553,7 +599,9 @@ pub unsafe extern "C" fn xfs_key(b: *mut Bridge, code: u32, modifiers: u32) -> i
             }
             // Shiloh stores the current key separately from its queued KeyPress action.
             // Dispatch the action before ScummVM can deliver another key in the same frame.
-            host::key(s, host::char_of_oem_vk(code).unwrap_or(code));
+            if !navigate_with_key(s, code, modifiers & 4 != 0) {
+                host::key(s, host::char_of_oem_vk(code).unwrap_or(code));
+            }
             if s.r.pending() != 0 {
                 b.step(0)?;
             }
@@ -828,6 +876,41 @@ mod tests {
                 let band = 90 * 640 * 3..330 * 640 * 3;
                 assert_ne!(actual[band.clone()], plain[band.clone()]);
                 assert_eq!(actual[band.clone()], expected[band]);
+            }
+        });
+    }
+
+    #[test]
+    fn navigation_keys_follow_original_hotspots() {
+        use xf::world::class::NAV;
+
+        with_game(|bridge| {
+            for (nav, letter, arrow) in [
+                (0x2ba, b'A', 0x25),
+                (0x2b9, b'D', 0x27),
+                (0x4f0, b'W', 0x26),
+                (0x1c5a, b'S', 0x28),
+                (0x1186, b'W', 0x26),
+                (0x1181, b'S', 0x28),
+            ] {
+                for key in [u32::from(letter), arrow] {
+                    let s = bridge.session.as_mut().unwrap();
+                    s.reload_core(s.r.w.gam);
+                    let dest = s.r.w.h.read(NAV, nav).unwrap().u32("destView");
+                    s.r.w.view = Some(if dest == 0x2b3 { 0x2b4 } else { 0x2b3 });
+                    // Register an exit from the original data without playing through its location.
+                    s.r.w.hotspots.push(nav);
+                    s.r.external_register(nav, s.r.w.trigger_list_of(nav).unwrap());
+                    bridge.step(0).unwrap();
+                    let s = bridge.session.as_ref().unwrap();
+                    assert!(s.r.clickables().iter().any(|item| item.owner == nav));
+                    let before = s.r.transitions.len();
+                    unsafe { assert_eq!(xfs_key(bridge, key, 4), 0); }
+                    assert_eq!(bridge.session.as_ref().unwrap().r.transitions.len(), before);
+                    unsafe { assert_eq!(xfs_key(bridge, key, 0), 0); }
+                    assert_eq!(bridge.session.as_ref().unwrap().r.transitions.last().map(|entry| entry.0),
+                        Some(dest), "navigation {nav:#x} for key {key:#x}");
+                }
             }
         });
     }
