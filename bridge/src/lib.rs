@@ -11,6 +11,7 @@ mod prepare;
 mod audio_index;
 mod camera;
 mod movie_hotspots;
+mod photo_export;
 pub fn inspect_cd_folder(selected:&Path)->Result<(),String>{
     let original=prepare::selected_root(selected)?;
     let data=prepare::data_root(&original)?;
@@ -221,7 +222,11 @@ impl Bridge {
         let previous_log = s.r.log.len();
         let previous_media = s.r.media_log.len();
         let previous_exposures = s.r.w.pc.camera;
+        let previous_album = photo_export::AlbumBefore::capture(s);
         s.tick(dt.min(250) as u64);
+        if let Some(notice) = previous_album.and_then(|album| album.export(s, &self.saves)) {
+            self.notice = Some(notice);
+        }
         if s.r.w.pc.camera > previous_exposures {
             self.camera.play_shutter(&mut self.mix, camera::SHUTTER, s.now);
         }
@@ -989,12 +994,35 @@ mod tests {
             assert_eq!(s.r.w.pc.camera, CAMERA_EXPOSURES);
             assert!(bridge.camera.audio(s).is_some_and(|cue| cue.asset == camera::EMPTY_SHUTTER),
                 "empty shutter audio missing: {:?}", s.clip(camera::EMPTY_SHUTTER));
-            for action in [0x15808, 0xd03d, 0xd052] {
-                s.r.w.execute(Msg { action, trigger: 0 });
-            }
+            let exports = bridge.saves.join("foto");
+            assert!(!exports.exists());
+            s.r.media_ended(movie);
+            s.r.viewer_show_layout(0x3b80); // Original photo album.
+            bridge.step(16).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            let [left, top, right, bottom] = s.r.clickables().into_iter()
+                .find(|item| item.owner == 0xc8c5).expect("Download button").rect.map(i32::from);
+            let point = ((left + right) / 2, (top + bottom) / 2);
+            click(bridge, point.0, point.1);
+            bridge.step(16).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            s.r.w.execute(Msg { action: 0xd052, trigger: 0 }); // Enlarge the first photo.
             assert_eq!(s.r.w.pc.photos, [(still, true), (movie, true)]);
             assert_eq!(s.r.w.pc.camera, 0);
             assert_eq!(s.r.w.pc.enlarged, Some(0));
+            let mut files: Vec<_> = std::fs::read_dir(&exports).unwrap()
+                .map(|entry| entry.unwrap().path()).collect();
+            files.sort();
+            assert_eq!(files.len(), 2);
+            let bmp = std::fs::read(&files[1]).unwrap();
+            assert_eq!(&bmp[..2], b"BM");
+            assert_eq!(&bmp[18..22], &320i32.to_le_bytes());
+            assert_eq!(&bmp[22..26], &(-240i32).to_le_bytes());
+            assert_eq!(&bmp[54..57], &[photo.rgb[2], photo.rgb[1], photo.rgb[0]]);
+            click(bridge, point.0, point.1);
+            bridge.step(16).unwrap();
+            assert_eq!(std::fs::read_dir(&exports).unwrap().count(), 2);
+            let s = bridge.session.as_mut().unwrap();
             // The sedan's license plate is an authored evidence photo, not a generic movie crop.
             s.r.w.execute(Msg { action: 0x1372c, trigger: 0 });
             assert_eq!(s.r.w.pc.photos[2], (0x1372e, false));
@@ -1007,6 +1035,7 @@ mod tests {
             assert_eq!(s.r.w.pc.photo_frames[1], frame);
             assert_eq!(s.r.w.pc.camera, 1);
             assert_eq!(s.photo_picture(movie, frame).unwrap().rgb, photo.rgb);
+            assert_eq!(std::fs::read_dir(&exports).unwrap().count(), 2);
         });
     }
 
