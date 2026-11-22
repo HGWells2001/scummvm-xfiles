@@ -2,12 +2,17 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/44956045277/artifacts/14727631187).
+[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/45008367626/artifacts/14748538771).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
 2. Usa la cartella del gioco, per esempio **D:\Giochi scumm\XFiles** oppure **D:\Giochi scumm\XFiles(Ita)**.
 3. Apri scummvm.exe di questa build, scegli **Aggiungi gioco** e seleziona la cartella principale desiderata.
 4. Conferma e premi **Gioca**.
+
+Seleziona il **binocolo** dall'inventario e punta sulla scena per ingrandirla.
+Lo zoom 2× funziona sulle immagini fisse e durante i filmati di gioco. Le scene
+con un primo piano originale, come il magazzino e lo scalo ferroviario, usano
+quell'inquadratura.
 
 Premi **F3** per mostrare o nascondere i sottotitoli presenti nei dati del gioco.
 
