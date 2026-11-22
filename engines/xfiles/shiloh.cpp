@@ -9,6 +9,7 @@
 #include "common/savefile.h"
 #include "common/system.h"
 #include "common/textconsole.h"
+#include "engines/dialogs.h"
 #include "engines/util.h"
 #include "engines/metaengine.h"
 #include "graphics/cursorman.h"
@@ -51,6 +52,33 @@ int collectSave(void *context, const byte *data, size_t length) {
 	payload.assign(data, data + length);
 	return 1;
 }
+
+class ShilohMainMenu final : public MainMenuDialog {
+public:
+	explicit ShilohMainMenu(Engine *engine) : MainMenuDialog(engine) {}
+
+	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override {
+		if (cmd == kLauncherCmd) {
+			_returnRequested = true;
+			close();
+			return;
+		}
+		MainMenuDialog::handleCommand(sender, cmd, data);
+	}
+
+	void postLauncherRequest(Common::EventManager &events) {
+		if (!_returnRequested)
+			return;
+		_returnRequested = false;
+		Common::Event event;
+		event.type = Common::EVENT_RETURN_TO_LAUNCHER;
+		events.pushEvent(event);
+	}
+
+private:
+	bool _returnRequested = false;
+};
+
 // Set before the engine's graphics transaction recreates the SDL renderer.
 // Restore the previous hint when returning to the launcher.
 struct SoftwareVideoHint {
@@ -188,6 +216,8 @@ Common::Error ShilohEngine::run(){
 				return result;
 		}
 	}
+	auto *menu = new ShilohMainMenu(this);
+	_mainMenuDialog = menu;
 	std::vector<byte> rgb(640*480*3);
 	const Graphics::PixelFormat source(3,8,8,8,0,0,8,16,0);
 	Audio::QueuingAudioStream *audio=Audio::makeQueuingAudioStream(44100,true);
@@ -196,7 +226,12 @@ Common::Error ShilohEngine::run(){
 	int result=0;
 	while(!shouldQuit()){
 		Common::Event event;
-		while(!shouldQuit() && _eventMan->pollEvent(event)){
+		while(!shouldQuit()){
+			// The modal loop and openMainMenuDialog's backend restore are complete.
+			// Dispatch the request now so the launcher starts outside the GUI loop.
+			menu->postLauncherRequest(*_eventMan);
+			if (!_eventMan->pollEvent(event))
+				break;
 			int kind=-1;
 			switch(event.type){
 			case Common::EVENT_RETURN_TO_LAUNCHER:
