@@ -2,7 +2,7 @@
 
 ## Windows: avvio dall'interfaccia di ScummVM
 
-[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/45008367626/artifacts/14748538771).
+[Scarica la build Windows](https://github.com/HGWells2001/scummvm-xfiles/actions/runs/45009410376/artifacts/14749406339).
 
 1. Estrai tutto il nuovo pacchetto Windows in una cartella per ScummVM.
 2. Usa la cartella del gioco, per esempio **D:\Giochi scumm\XFiles** oppure **D:\Giochi scumm\XFiles(Ita)**.
@@ -13,12 +13,6 @@ Seleziona il **binocolo** dall'inventario e punta sulla scena per ingrandirla.
 Lo zoom 2× funziona sulle immagini fisse e durante i filmati di gioco. Le scene
 con un primo piano originale, come il magazzino e lo scalo ferroviario, usano
 quell'inquadratura.
-
-Premi **F3** per mostrare o nascondere i sottotitoli presenti nei dati del gioco.
-
-Durante il gioco, **F1** mostra o nasconde le aree cliccabili, inclusi i bersagli
-attivi dei filmati. Quando i riquadri sono visibili, la console registra il punto
-del clic, la scena e l'eventuale reazione del bersaglio.
 
 Per altre copie dei CD, unisci il contenuto dei sette dischi mantenendo le
 sottocartelle MININST, MEDINST, XV, XN, XS, XG, XT e i file NAV*.NMV.
@@ -34,9 +28,10 @@ cache, il motore ripete la verifica completa; l'audio conserva anche il controll
 del contenuto quando viene riprodotto. Il primo avvio dopo questo aggiornamento
 crea l'indice. La finestra del gioco viene inizializzata al termine del caricamento,
 senza la schermata nera con "Preparazione del gioco...".
-Premi **F5** per aprire il menu di ScummVM e usare i suoi slot. Puoi salvare
-quando la scena e stabile e caricare anche dal launcher. I salvataggi precedenti
-restano accessibili dal menu originale di The X-Files.
+Premi **F5** per aprire il menu di ScummVM. Da qui puoi salvare quando la scena
+e stabile e caricare dagli slot di ScummVM. Puoi anche scegliere **Carica** dal
+launcher, dopo aver selezionato il gioco. I salvataggi precedenti restano
+accessibili dal menu originale di The X-Files.
 
 Su Windows il motore imposta il renderer software prima di inizializzare il video.
 Il gioco usa direttamente i file completi della cartella selezionata. Il motore
@@ -74,8 +69,9 @@ media but does not execute a game. A runtime build can select it with
 `xfiles_research=true` in the game target.
 The Rust dependency is pinned to `e3dfde0d098b25135a5243839d44842ccbc5fe91`.
 Rust is pinned to 1.100.0 and the resolved crates are recorded in `bridge/Cargo.lock`.
-ScummVM slots store the Shiloh game state with standard ScummVM metadata.
-The original game's slots and preferences are in the `xfiles-shiloh` subdirectory.
+ScummVM save slots use its standard save manager and extended metadata, with
+the Shiloh game state stored inside each slot. The original game's slots and
+preferences are stored in the save directory's `xfiles-shiloh` subdirectory.
 
 ## Older Windows builds and optional preparation scripts
 
