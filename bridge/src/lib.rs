@@ -4,8 +4,9 @@
 use std::ffi::{CStr, c_char};
 use std::path::{Path, PathBuf};
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use xf::front::{self, Session, host, intro::Start};
+use xf::front::{self, Session, SCREEN_W, VIEW_X, VIEW_Y, host, intro::Start};
 use xf::hdb::Hdb;
+use xf::media::{FRAME_H, FRAME_W, pict::Picture};
 mod prepare;
 mod audio_index;
 mod movie_hotspots;
@@ -26,6 +27,8 @@ const ARREST_HOTSPOT: u32 = 600;
 const WAREHOUSE_WIDE: u32 = 0x5bbe;
 const WAREHOUSE_BINOCULARS: u32 = 0x11432;
 const BINOCULAR_BACKGROUNDS: [u32; 4] = [0x1ec6, 0x11436, 0x11438, 0x118ea];
+const VIEW_RIGHT: usize = VIEW_X + FRAME_W;
+const VIEW_BOTTOM: usize = VIEW_Y + FRAME_H;
 
 fn binoculars_held(s: &Session<'_>) -> bool {
     s.r.w.dev.held == Some(1) && s.r.game_running && !s.intro_playing()
@@ -40,16 +43,37 @@ fn binocular_movie_position(s: &Session<'_>) -> Option<u64> {
 }
 
 fn zoom_scene(frame: &mut [u8], aim: (usize, usize)) {
-    let scene = frame[90 * 640 * 3..330 * 640 * 3].to_vec();
+    let scene = frame[VIEW_Y * SCREEN_W * 3..VIEW_BOTTOM * SCREEN_W * 3].to_vec();
     let (ax, ay) = aim;
-    for y in 90..330 {
-        for x in 20..620 {
+    for y in VIEW_Y..VIEW_BOTTOM {
+        for x in VIEW_X..VIEW_RIGHT {
             // Keep the point under the cursor fixed as the glass moves.
-            let source = (((y + ay) / 2 - 90) * 640 + (x + ax) / 2) * 3;
-            let destination = (y * 640 + x) * 3;
+            let source = (((y + ay) / 2 - VIEW_Y) * SCREEN_W + (x + ax) / 2) * 3;
+            let destination = (y * SCREEN_W + x) * 3;
             frame[destination..destination + 3].copy_from_slice(&scene[source..source + 3]);
         }
     }
+}
+
+fn draw_binocular_mask(frame: &mut [u8], aim: (i32, i32), mask: &Picture) {
+    let left = aim.0 - mask.width as i32 / 2;
+    let top = aim.1 - mask.height as i32 / 2;
+    let mask_rows = top..top + mask.height as i32;
+    let clip_x = |x: i32| x.clamp(VIEW_X as i32, VIEW_RIGHT as i32) as usize;
+    let visible_left = clip_x(left);
+    let visible_right = clip_x(left + mask.width as i32);
+
+    // Shiloh applies the mask only where its image overlaps the scene.
+    for y in VIEW_Y..VIEW_BOTTOM {
+        let row = y * SCREEN_W * 3;
+        if mask_rows.contains(&(y as i32)) {
+            frame[row + VIEW_X * 3..row + visible_left * 3].fill(0);
+            frame[row + visible_right * 3..row + VIEW_RIGHT * 3].fill(0);
+        } else {
+            frame[row + VIEW_X * 3..row + VIEW_RIGHT * 3].fill(0);
+        }
+    }
+    front::light::draw_binoc(frame, aim, mask);
 }
 
 enum MovieShot {
@@ -488,7 +512,8 @@ pub unsafe extern "C" fn xfs_frame(b: *mut Bridge, out: *mut u8, length: usize) 
         let authored_background = s.r.video_playing().is_none()
             && s.r.background.is_some_and(|asset| BINOCULAR_BACKGROUNDS.contains(&asset));
         let aim = (binoculars && s.preview.is_none() && !authored_background).then_some(s.mouse).flatten()
-            .filter(|&(x, y)| (20..620).contains(&x) && (90..330).contains(&y));
+            .filter(|&(x, y)| (VIEW_X as i32..VIEW_RIGHT as i32).contains(&x)
+                && (VIEW_Y as i32..VIEW_BOTTOM as i32).contains(&y));
         let held_overlay = s.r.w.dev.held_overlay;
         if binoculars {
             s.r.w.dev.held_overlay = false;
@@ -500,7 +525,7 @@ pub unsafe extern "C" fn xfs_frame(b: *mut Bridge, out: *mut u8, length: usize) 
         if let Some((x, y)) = aim {
             zoom_scene(&mut frame, (x as usize, y as usize));
             if let Some(mask) = s.picture(front::light::BINOCULAR_MASK) {
-                front::light::draw_binoc(&mut frame, (x, y), mask);
+                draw_binocular_mask(&mut frame, (x, y), mask);
             }
         }
         std::ptr::copy_nonoverlapping(frame.as_ptr(),out,PIXELS);Ok(())
@@ -673,14 +698,41 @@ mod tests {
     }
 
     #[test]
+    fn binocular_mask_blacks_out_uncovered_scene_edges() {
+        let mask = Picture {
+            width: FRAME_W,
+            height: 275,
+            rgb: vec![255; FRAME_W * 275 * 3],
+            alpha: None,
+        };
+        let pixel = |x: usize, y: usize| {
+            let start = (y * SCREEN_W + x) * 3;
+            start..start + 3
+        };
+        for ((x, y), (other_x, other_y)) in [
+            ((VIEW_X, VIEW_Y), (VIEW_RIGHT - 1, VIEW_BOTTOM - 1)),
+            ((VIEW_RIGHT - 1, VIEW_BOTTOM - 1), (VIEW_X, VIEW_Y)),
+        ] {
+            let mut frame = vec![120; PIXELS];
+            draw_binocular_mask(&mut frame, (x as i32, y as i32), &mask);
+            assert_eq!(frame[pixel(other_x, y)], [0; 3]);
+            assert_eq!(frame[pixel(x, other_y)], [0; 3]);
+            assert_eq!(frame[pixel(x, y)], [120; 3]);
+            assert_eq!(frame[pixel(x, VIEW_Y - 1)], [120; 3]);
+            assert_eq!(frame[pixel(x, VIEW_BOTTOM)], [120; 3]);
+        }
+    }
+
+    #[test]
     fn binocular_zoom_applies_to_an_ordinary_still_and_movie() {
         use xf::world::{Out, RegCause};
 
+        let aim = (45, 105);
         with_game(|bridge| {
             let s = bridge.session.as_mut().unwrap();
             s.reload_core(s.r.w.gam);
             s.r.background = Some(0x1ec7); // Wide shot at the railway yard.
-            s.mouse = Some((320, 210));
+            s.mouse = Some(aim);
             s.game_cursor = false;
             bridge.step(100).unwrap();
             for movie in [None, Some(0x4d64)] {
@@ -696,9 +748,9 @@ mod tests {
                 s.r.w.dev.held = None;
                 let plain = s.render();
                 let mut expected = plain.clone();
-                zoom_scene(&mut expected, (320, 210));
+                zoom_scene(&mut expected, (aim.0 as usize, aim.1 as usize));
                 let mask = s.picture(front::light::BINOCULAR_MASK).unwrap();
-                front::light::draw_binoc(&mut expected, (320, 210), mask);
+                draw_binocular_mask(&mut expected, aim, mask);
                 s.r.w.dev.held = Some(1);
                 s.r.w.dev.held_overlay = true;
                 let mut actual = vec![0; PIXELS];
