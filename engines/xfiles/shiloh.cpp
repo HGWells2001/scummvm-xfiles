@@ -196,9 +196,13 @@ Common::Error ShilohEngine::run(){
 	int result=0;
 	while(!shouldQuit()){
 		Common::Event event;
-		while(_eventMan->pollEvent(event)){
+		while(!shouldQuit() && _eventMan->pollEvent(event)){
 			int kind=-1;
 			switch(event.type){
+			case Common::EVENT_RETURN_TO_LAUNCHER:
+			case Common::EVENT_QUIT:
+				// The event manager has accepted the request. Let ScummVM restore the launcher.
+				return Common::kNoError;
 			case Common::EVENT_MOUSEMOVE:kind=0;break;
 			case Common::EVENT_LBUTTONDOWN:kind=1;break;
 			case Common::EVENT_LBUTTONUP:kind=2;break;
@@ -224,7 +228,7 @@ Common::Error ShilohEngine::run(){
 			if(kind>=0)result=xfs_pointer(core,kind,event.mouse.x,event.mouse.y);
 			if(result)break;
 		}
-		if(result)break;
+		if(result || shouldQuit())break;
 		const uint32 now=_system->getMillis();
 		if(now-_lastTick<16){_system->delayMillis(1);continue;}
 		const uint32 dt=MIN<uint32>(now-_lastTick,250);_lastTick=now;
