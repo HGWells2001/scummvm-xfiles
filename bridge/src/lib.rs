@@ -25,15 +25,31 @@ const GUNSHOT_SOUND: u32 = 0x87b7;
 const ARREST_HOTSPOT: u32 = 600;
 const WAREHOUSE_WIDE: u32 = 0x5bbe;
 const WAREHOUSE_BINOCULARS: u32 = 0x11432;
+const BINOCULAR_BACKGROUNDS: [u32; 4] = [0x1ec6, 0x11436, 0x11438, 0x118ea];
+
+fn binoculars_held(s: &Session<'_>) -> bool {
+    s.r.w.dev.held == Some(1) && s.r.game_running && !s.intro_playing()
+        && !s.r.game_paused() && !s.r.frozen && !s.r.rewind_box
+        && s.preview.is_none() && s.alt.msgbox.is_none()
+}
 
 fn binocular_movie_position(s: &Session<'_>) -> Option<u64> {
-    if s.r.w.dev.held != Some(1) || s.r.game_paused() || s.r.frozen
-        || s.r.rewind_box || s.preview.is_some() || s.alt.msgbox.is_some()
-    {
-        return None;
-    }
+    if !binoculars_held(s) { return None; }
     let (asset, position) = s.picture_head()?;
     (asset == WAREHOUSE_WIDE).then_some(position)
+}
+
+fn zoom_scene(frame: &mut [u8], aim: (usize, usize)) {
+    let scene = frame[90 * 640 * 3..330 * 640 * 3].to_vec();
+    let (ax, ay) = aim;
+    for y in 90..330 {
+        for x in 20..620 {
+            // Keep the point under the cursor fixed as the glass moves.
+            let source = (((y + ay) / 2 - 90) * 640 + (x + ax) / 2) * 3;
+            let destination = (y * 640 + x) * 3;
+            frame[destination..destination + 3].copy_from_slice(&scene[source..source + 3]);
+        }
+    }
 }
 
 enum MovieShot {
@@ -462,15 +478,31 @@ pub unsafe extern "C" fn xfs_frame(b: *mut Bridge, out: *mut u8, length: usize) 
     call(b,|b| {
         let s = b.session.as_mut().ok_or("Session unavailable")?;
         let preview = s.preview;
+        let binoculars = binoculars_held(s);
         if let Some(position) = binocular_movie_position(s) {
             if s.clip(WAREHOUSE_BINOCULARS).is_some() {
                 // The wide player still owns the scene's completion and its queued actions.
                 s.preview = Some((WAREHOUSE_BINOCULARS, s.picture_now().saturating_sub(position)));
             }
         }
-        let frame = s.render();
+        let authored_background = s.r.video_playing().is_none()
+            && s.r.background.is_some_and(|asset| BINOCULAR_BACKGROUNDS.contains(&asset));
+        let aim = (binoculars && s.preview.is_none() && !authored_background).then_some(s.mouse).flatten()
+            .filter(|&(x, y)| (20..620).contains(&x) && (90..330).contains(&y));
+        let held_overlay = s.r.w.dev.held_overlay;
+        if binoculars {
+            s.r.w.dev.held_overlay = false;
+        }
+        let mut frame = s.render();
+        s.r.w.dev.held_overlay = held_overlay;
         s.preview = preview;
         if frame.len()!=PIXELS {return Err("Unexpected framebuffer length".into());}
+        if let Some((x, y)) = aim {
+            zoom_scene(&mut frame, (x as usize, y as usize));
+            if let Some(mask) = s.picture(front::light::BINOCULAR_MASK) {
+                front::light::draw_binoc(&mut frame, (x, y), mask);
+            }
+        }
         std::ptr::copy_nonoverlapping(frame.as_ptr(),out,PIXELS);Ok(())
     })
 }
@@ -619,6 +651,62 @@ mod tests {
             assert!(s.preview.is_none());
             unsafe { assert_eq!(xfs_frame(bridge, closeup.as_mut_ptr(), PIXELS), 0); }
             assert_eq!(wide[band_pixel(320, 210)], closeup[band_pixel(320, 210)]);
+        });
+    }
+
+    #[test]
+    fn binocular_zoom_keeps_the_aim_and_stays_inside_the_scene() {
+        let mut frame = vec![0; PIXELS];
+        for y in 0..480 {
+            for x in 0..640 {
+                let p = (y * 640 + x) * 3;
+                frame[p..p + 3].copy_from_slice(&[x as u8, y as u8, 100]);
+            }
+        }
+        let original = frame.clone();
+        zoom_scene(&mut frame, (320, 210));
+        let pixel = |x: usize, y: usize| ((y * 640 + x) * 3)..((y * 640 + x) * 3 + 3);
+        assert_eq!(frame[pixel(320, 210)], original[pixel(320, 210)]);
+        assert_eq!(frame[pixel(160, 150)], original[pixel(240, 180)]);
+        assert_eq!(frame[pixel(160, 89)], original[pixel(160, 89)]);
+        assert_eq!(frame[pixel(160, 330)], original[pixel(160, 330)]);
+    }
+
+    #[test]
+    fn binocular_zoom_applies_to_an_ordinary_still_and_movie() {
+        use xf::world::{Out, RegCause};
+
+        with_game(|bridge| {
+            let s = bridge.session.as_mut().unwrap();
+            s.reload_core(s.r.w.gam);
+            s.r.background = Some(0x1ec7); // Wide shot at the railway yard.
+            s.mouse = Some((320, 210));
+            s.game_cursor = false;
+            bridge.step(100).unwrap();
+            for movie in [None, Some(0x4d64)] {
+                if let Some(owner) = movie {
+                    let s = bridge.session.as_mut().unwrap();
+                    let tl = s.r.w.trigger_list_of(owner);
+                    s.r.w.out.push(Out::Reg { owner, tl, cause: RegCause::PlayAsset { action: 0 } });
+                    s.r.external_register(0, 0);
+                }
+                bridge.step(100).unwrap();
+                let s = bridge.session.as_mut().unwrap();
+                assert_eq!(s.r.video_playing(), movie);
+                s.r.w.dev.held = None;
+                let plain = s.render();
+                let mut expected = plain.clone();
+                zoom_scene(&mut expected, (320, 210));
+                let mask = s.picture(front::light::BINOCULAR_MASK).unwrap();
+                front::light::draw_binoc(&mut expected, (320, 210), mask);
+                s.r.w.dev.held = Some(1);
+                s.r.w.dev.held_overlay = true;
+                let mut actual = vec![0; PIXELS];
+                unsafe { assert_eq!(xfs_frame(bridge, actual.as_mut_ptr(), PIXELS), 0); }
+                let band = 90 * 640 * 3..330 * 640 * 3;
+                assert_ne!(actual[band.clone()], plain[band.clone()]);
+                assert_eq!(actual[band.clone()], expected[band]);
+            }
         });
     }
 
