@@ -494,10 +494,35 @@ pub unsafe extern "C" fn xfs_pointer(b: *mut Bridge, kind: u32, x: i32, y: i32) 
         Ok(())
     })
 }
+
+fn scroll_computer_page(s: &mut Session<'_>, key: u32) -> bool {
+    if !matches!(key, 0x21 | 0x22) || s.intro_playing() || s.r.game_paused()
+        || s.r.frozen || s.r.rewind_box || s.alt.paused || s.alt.msgbox.is_some()
+        || s.r.w.notes_ui.open
+    {
+        return false;
+    }
+    let pc = &s.r.w.pc;
+    let (Some(panel), Some(max)) = (pc.panel_item, pc.scroll_max) else { return false; };
+    if !s.r.w.layouts().iter().any(|(_, items)| items.iter().any(|&(item, _)| item == panel)) {
+        return false;
+    }
+    let page = pc.scroll_page.max(1);
+    let first = pc.scroll.min(max);
+    s.r.w.pc.scroll = if key == 0x22 {
+        first.saturating_add(page).min(max)
+    } else if s.r.w.rules.h892_page_up_top && first <= pc.scroll_to_top {
+        0
+    } else {
+        first.saturating_sub(page)
+    };
+    true
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn xfs_key(b: *mut Bridge, code: u32, modifiers: u32) -> i32 {
     call(b,|b| {
-        let s=b.session.as_mut().ok_or("Session unavailable")?;
+        let s = b.session.as_mut().ok_or("Session unavailable")?;
         if modifiers&1!=0 {
             if matches!(host::alt(s,code,modifiers&2!=0), front::altkeys::AltOut::Exit) {b.quit=true;}
         } else if code == 0x70 {
@@ -506,7 +531,28 @@ pub unsafe extern "C" fn xfs_key(b: *mut Bridge, code: u32, modifiers: u32) -> i
             let enabled = !s.r.w.closed_captioning();
             s.r.set_closed_captioning(enabled);
             b.notice = Some(if enabled { "Sottotitoli attivati" } else { "Sottotitoli disattivati" }.into());
-        } else {host::key(s,code);}
+        } else {
+            // Apply queued mouse clicks first so typing reaches the newly focused field.
+            if s.r.pending() != 0 {
+                b.step(0)?;
+                if b.quit { return Ok(()); }
+            }
+            let s = b.session.as_mut().ok_or("Session unavailable")?;
+            if scroll_computer_page(s, code) {
+                return Ok(());
+            }
+            if code != 0x1b && s.r.stall_until.is_some_and(|until| s.now < until)
+                && !s.r.game_paused() && !s.r.rewind_box && !s.alt.paused && s.alt.msgbox.is_none()
+            {
+                return Ok(());
+            }
+            // Shiloh stores the current key separately from its queued KeyPress action.
+            // Dispatch the action before ScummVM can deliver another key in the same frame.
+            host::key(s, host::char_of_oem_vk(code).unwrap_or(code));
+            if s.r.pending() != 0 {
+                b.step(0)?;
+            }
+        }
         Ok(())
     })
 }
@@ -778,6 +824,115 @@ mod tests {
                 assert_ne!(actual[band.clone()], plain[band.clone()]);
                 assert_eq!(actual[band.clone()], expected[band]);
             }
+        });
+    }
+
+    #[test]
+    fn computer_keeps_keyboard_input_in_order() {
+        use xf::world::procs::computer::{self, MEDIA_FIELD, ING_FIELD};
+        use xf::world::{class, Msg};
+
+        with_game(|bridge| {
+            let s = bridge.session.as_mut().unwrap();
+            s.reload_core(s.r.w.gam);
+            let media_key = s.r.w.h.exe.media_keys.iter().find_map(|&item| {
+                let h = s.r.w.h;
+                let list = h.read(class::INTERFACE_ITEM, item)?.u32("f44");
+                let assets = h.list_of(class::ASSET_REF_LIST, list);
+                let (&article, words) = assets.split_first()?;
+                if article != 0xd927 { return None; } // The Coast Guard article leads to a new location.
+                let word = words.iter()
+                    .filter_map(|&a| computer::asset_string(&s.r.w, a))
+                    .find(|word| (2..=25).contains(&word.len())
+                        && word.bytes().all(|c| c.is_ascii_alphanumeric() || c == b' '))?;
+                Some((article, word))
+            }).expect("the original media index has no searchable article");
+            s.r.viewer_show_layout(0x3b68); // Media index.
+            bridge.step(16).unwrap();
+            assert_eq!(bridge.session.as_ref().unwrap().r.w.dev.focus, Some(MEDIA_FIELD));
+            let type_keys = |bridge: &mut Bridge, keys: &[u32]| {
+                for &key in keys {
+                    assert_eq!(unsafe { xfs_key(bridge, key, 0) }, 0);
+                }
+            };
+            type_keys(bridge, &[b'A' as u32, 0xbd, b'B' as u32, 0xbe, 0xbc, 8]);
+            bridge.step(16).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.pc.media, "A-B.");
+            type_keys(bridge, &[8; 4]);
+            let query = media_key.1.chars().map(host::vk_of_char).collect::<Vec<_>>();
+            type_keys(bridge, &query);
+            assert_eq!(bridge.session.as_ref().unwrap().r.w.pc.media, media_key.1.to_ascii_uppercase());
+            type_keys(bridge, &[13]);
+            for _ in 0..24 { bridge.step(250).unwrap(); }
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.pc.last_shown, media_key.0,
+                "query {:?}; search executed: {}", media_key.1, s.r.execs.contains(&0xe90b));
+            assert!(front::computer::asset_text(s, media_key.0).is_some_and(|text| !text.is_empty()));
+
+            s.reload_core(s.r.w.gam);
+            s.r.viewer_show_layout(0x3b04); // ING.
+            bridge.step(16).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.dev.focus, Some(ING_FIELD));
+            let plate = s.r.w.h.exe.pc.ing_plates[0];
+            let reply = s.r.w.h.exe.pc.ing_plates[1];
+            let query = computer::asset_string(&s.r.w, plate).unwrap();
+            s.r.w.vars.set_native(0x5b2, Some(i32::from(b'L')), 0);
+            s.r.w.vars.set_native(0x731, Some(i32::from(b'Z')), 0);
+            let query = query.chars().map(host::vk_of_char).collect::<Vec<_>>();
+            type_keys(bridge, &query);
+            type_keys(bridge, &[13]);
+            for _ in 0..24 { bridge.step(250).unwrap(); }
+            let s = bridge.session.as_mut().unwrap();
+            assert!(s.r.w.pc.texts.iter().any(|(item, src, _)| {
+                *item == computer::ING_MESSAGE && *src == computer::Src::Asset(reply)
+            }));
+
+            s.reload_core(s.r.w.gam);
+            s.r.viewer_show_layout(0x3b99); // Login.
+            bridge.step(16).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            s.r.w.execute(Msg { action: 0x1020e, trigger: 0 }); // Click the login name field.
+            let name = front::computer::asset_text(s, 0xe231).unwrap().to_ascii_uppercase();
+            let password = front::computer::asset_text(s, 0x10d33).unwrap().to_ascii_uppercase();
+            let keys = |text: &str| text.chars().map(host::vk_of_char).collect::<Vec<_>>();
+            type_keys(bridge, &[8; 23]);
+            type_keys(bridge, &keys(&name));
+            type_keys(bridge, &[9]);
+            type_keys(bridge, &keys(&password));
+            assert_eq!(bridge.session.as_ref().unwrap().r.w.dev.focus, Some(0xc63c));
+            type_keys(bridge, &[13]);
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.vars.get(0x9ff), Some(1));
+            assert_eq!(s.r.w.vars.get(0x1352), Some(1));
+
+            // Open the actual reader layout, with a real message from the game's inbox.
+            let panel = 0xd6a6;
+            s.r.w.execute(Msg { action: 0x10b56, trigger: 0 }); // SendEmail.
+            s.r.w.execute(Msg { action: 0xfbef, trigger: 0 }); // Deliver pending mail.
+            s.r.w.execute(Msg { action: 0xf305, trigger: 0 }); // Initialize the computer inbox.
+            s.r.w.execute(Msg { action: 0xf553, trigger: 0 }); // Display the inbox.
+            s.r.w.execute(Msg { action: 0xd87f, trigger: 0 }); // Select the first mail.
+            s.r.w.execute(Msg { action: 0xd880, trigger: 0 }); // Mark it read.
+            let selected = s.r.w.vars.get(0xa97).unwrap() as u32;
+            assert!(s.r.w.px.read.contains(&selected));
+            assert!(front::computer::asset_text(s, selected).is_some_and(|text| !text.is_empty()));
+            s.r.viewer_show_layout(0xd63b);
+            bridge.step(16).unwrap();
+            let s = bridge.session.as_mut().unwrap();
+            assert_eq!(s.r.w.pc.last_shown, selected);
+            s.render();
+            assert_eq!(s.r.w.pc.panel_item, Some(panel));
+            assert!(s.r.w.pc.scroll_max.is_some());
+            // Exercise the page boundaries independently of the localized message's line count.
+            s.r.w.pc.scroll_max = Some(10);
+            s.r.w.pc.scroll_page = 6;
+            s.r.w.pc.scroll_to_top = 0;
+            type_keys(bridge, &[0x22, 0x22]);
+            assert_eq!(bridge.session.as_ref().unwrap().r.w.pc.scroll, 10);
+            type_keys(bridge, &[0x21, 0x21]);
+            assert_eq!(bridge.session.as_ref().unwrap().r.w.pc.scroll, 0);
         });
     }
 

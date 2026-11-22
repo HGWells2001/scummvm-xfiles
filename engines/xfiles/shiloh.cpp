@@ -80,14 +80,16 @@ uint32 virtualKey(const Common::KeyState &key){
 	case Common::KEYCODE_ESCAPE:return 27;
 	case Common::KEYCODE_BACKSPACE:return 8;
 	case Common::KEYCODE_TAB:return 9;
+	case Common::KEYCODE_PAGEUP:return 0x21;
+	case Common::KEYCODE_PAGEDOWN:return 0x22;
 	case Common::KEYCODE_SPACE:return 32;
 	case Common::KEYCODE_DELETE:return 46;
 	case Common::KEYCODE_LEFT:return 37;
 	case Common::KEYCODE_UP:return 38;
 	case Common::KEYCODE_RIGHT:return 39;
 	case Common::KEYCODE_DOWN:return 40;
-	case Common::KEYCODE_MINUS:return 0xbd;
-	case Common::KEYCODE_PERIOD:return 0xbe;
+	case Common::KEYCODE_MINUS: case Common::KEYCODE_KP_MINUS:return 0xbd;
+	case Common::KEYCODE_PERIOD: case Common::KEYCODE_KP_PERIOD:return 0xbe;
 	case Common::KEYCODE_COMMA:return 0xbc;
 	default:return 0;
 	}
